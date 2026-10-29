@@ -2,6 +2,84 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script id="lumi-getcssvar">
+window.getCssVar = window.getCssVar || function(name, fallback) {
+  try {
+    var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback || '';
+  } catch (e) { return fallback || ''; }
+};
+</script>
+
+<script id="lumi-canvas-guard">
+(function() {
+  if (window.__lumiCanvasGuard) return;
+  window.__lumiCanvasGuard = true;
+  var MAX_PX = 4096, MIN_FONT_PX = 12;
+  try {
+    var CP = HTMLCanvasElement.prototype;
+    var BOX = {width: 'clientWidth', height: 'clientHeight'}, D = {};
+    Object.keys(BOX).forEach(function(p) {
+      D[p] = Object.getOwnPropertyDescriptor(CP, p);
+    });
+    var tracking = function(el, p) {
+      var box = el[BOX[p]];
+      return !el.style[p] && box > 0 && box === D[p].get.call(el) &&
+          box === el['__lumiLast' + p];
+    };
+    var MAX = {width: 'maxWidth', height: 'maxHeight'};
+    var PAD = {width: ['paddingLeft', 'paddingRight'],
+               height: ['paddingTop', 'paddingBottom']};
+    var avail = function(el, p) {
+      var pe = el.parentElement;
+      if (!pe) return 0;
+      var cs = getComputedStyle(pe);
+      return pe[BOX[p]] - parseFloat(cs[PAD[p][0]]) -
+          parseFloat(cs[PAD[p][1]]);
+    };
+    Object.keys(BOX).forEach(function(p) {
+      var d = D[p];
+      if (!d || !d.set || !d.get) return;
+      Object.defineProperty(CP, p, {
+        configurable: true, enumerable: d.enumerable, get: d.get,
+        set: function(v) {
+          var n = +v, box = this[BOX[p]];
+          if (n > MAX_PX) n = MAX_PX;
+          if (n > box && tracking(this, p)) {
+            var el = this, pins = {};
+            Object.keys(BOX).forEach(function(q) {
+              if (tracking(el, q)) pins[q] = avail(el, q) ||
+                  el['__lumiBox' + q];
+            });
+            Object.keys(pins).forEach(function(q) {
+              el.style[q] = '100%';
+              el.style[MAX[q]] = pins[q] + 'px';
+            });
+            n = box;
+          }
+          this['__lumiBox' + p] = box;
+          this['__lumiLast' + p] = n;
+          d.set.call(this, isNaN(n) ? v : n);
+        }
+      });
+    });
+  } catch (e) {}
+  try {
+    var XP = CanvasRenderingContext2D.prototype;
+    var px = /(\d*\.?\d+)px/;
+    var floorFont = function(ctx) {
+      var f = ctx.font, m = px.exec(f);
+      if (m && +m[1] >= 4 && +m[1] < MIN_FONT_PX) ctx.font = f.replace(px, MIN_FONT_PX + 'px');
+    };
+    ['fillText', 'strokeText', 'measureText'].forEach(function(k) {
+      var o = XP[k];
+      if (typeof o !== 'function') return;
+      XP[k] = function() { floorFont(this); return o.apply(this, arguments); };
+    });
+  } catch (e) {}
+})();
+</script>
+
 <style id="lumi-runtime">
 /* luminous.css */
 /*
@@ -73,8 +151,8 @@
   --lumi-sys-color--surface-translucent: rgba(255, 255, 255, 0.88);
   --lumi-sys-color--on-surface: #000000;
   --lumi-sys-color--on-surface-default: #000000;
-  --lumi-sys-color--on-surface-variant: rgba(0, 0, 0, 0.55);
-  --lumi-sys-color--on-surface-de-emphasis: rgba(0, 0, 0, 0.55);
+  --lumi-sys-color--on-surface-variant: rgba(0, 0, 0, 0.62);
+  --lumi-sys-color--on-surface-de-emphasis: rgba(0, 0, 0, 0.62);
   --lumi-sys-color--on-surface-low: rgba(0, 0, 0, 0.08);
   --lumi-sys-color--positive: #008052;
   --lumi-sys-color--positive-container: #daf9d4;
@@ -274,7 +352,7 @@ body.dark-mode,
   --surface-glass: var(--lumi-sys-color--surface-translucent, rgba(255, 255, 255, 0.88));
   /* foreground */
   --on-surface: var(--lumi-sys-color--on-surface, #000000);
-  --on-surface-variant: var(--lumi-sys-color--on-surface-variant, rgba(0, 0, 0, 0.55));
+  --on-surface-variant: var(--lumi-sys-color--on-surface-variant, rgba(0, 0, 0, 0.62));
   --on-surface-low: var(--lumi-sys-color--on-surface-low, rgba(0, 0, 0, 0.08));
   /* accents / brand */
   --primary: var(--lumi-sys-color--primary, #3186ff);
@@ -314,6 +392,8 @@ body.dark-mode,
   --r-s: var(--lumi-sys-shape--small, 8px);
   --r-m: var(--lumi-sys-shape--medium, 12px);
   --r-l: var(--lumi-sys-shape--large, 16px);
+  --r-xl: var(--lumi-sys-shape--xl, 28px);
+  --r-container: var(--lumi-sys-shape--xl-max, 40px);
   --r-full: var(--lumi-sys-shape--full, 999px);
 }
 
@@ -405,8 +485,8 @@ button:hover {
 }
 button.active, button.is-active, button.selected, button.is-selected, button[aria-pressed="true"], button[aria-selected="true"] {
   background-color: var(--accent-container, #dcf1ff);
-  color: var(--accent-fixed, #3186ff);
-  border-color: transparent;
+  color: var(--lumi-sys-color--on-surface-default, #000000);
+  border-color: var(--lumi-sys-color--primary, #3186ff);
 }
 
 .lumi-btn, [class^="lumi-btn-"], [class*=" lumi-btn-"] { display: inline-flex; align-items: center; justify-content: center; gap: var(--lumi-sys-spacing--s, 8px); min-height: 40px; padding: 0px 20px; font-family: var(--ff-sans, 'Google Sans Flex', 'Google Sans', sans-serif); font-size: 14px; font-weight: 500; line-height: 20px; border-radius: var(--lumi-sys-shape--full, 999px); border: 1px solid var(--lumi-sys-color--stroke-default, #e3e3e3); cursor: pointer; user-select: none; transition: background-color 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s; text-decoration: none; box-sizing: border-box; white-space: nowrap; }
@@ -424,7 +504,7 @@ button.active, button.is-active, button.selected, button.is-selected, button[ari
 .lumi-btn--small, .lumi-btn-small { min-height: 36px; padding: 0px 16px; font-size: 13px; line-height: 18px; gap: var(--lumi-sys-spacing--xs, 4px); }
 .lumi-btn--xsmall, .lumi-btn-xsmall { min-height: 24px; padding: 0px 10px; font-size: 11px; line-height: 16px; gap: 4px; }
 .lumi-btn:disabled, .lumi-btn.is-disabled, [class^="lumi-btn-"]:disabled, [class*=" lumi-btn-"]:disabled { opacity: var(--lumi-sys-opacity-state--disabled, 0.38); cursor: not-allowed; pointer-events: none; }
-.lumi-btn.is-selected, .lumi-btn.selected, .lumi-btn.is-active, .lumi-btn.active, .lumi-btn[aria-pressed="true"], .lumi-btn[aria-selected="true"] { background-color: var(--lumi-sys-color--accent-container, #dcf1ff); color: var(--lumi-sys-color--on-surface-default, #000000); border-color: transparent; }
+.lumi-btn.is-selected, .lumi-btn.selected, .lumi-btn.is-active, .lumi-btn.active, .lumi-btn[aria-pressed="true"], .lumi-btn[aria-selected="true"] { background-color: var(--lumi-sys-color--accent-container, #dcf1ff); color: var(--lumi-sys-color--on-surface-default, #000000); border-color: var(--lumi-sys-color--primary, #3186ff); }
 .lumi-btn.is-selected:hover, .lumi-btn.selected:hover, .lumi-btn.is-active:hover, .lumi-btn.active:hover, .lumi-btn[aria-pressed="true"]:hover, .lumi-btn[aria-selected="true"]:hover { background-color: var(--lumi-sys-color--accent, #9dd2ff); }
 
 /* --- Switch --- */
@@ -442,7 +522,7 @@ button.active, button.is-active, button.selected, button.is-selected, button[ari
 /* --- Checkbox --- */
 .lumi-checkbox-label { display: inline-flex; align-items: center; gap: var(--lumi-sys-spacing--s, 8px); cursor: pointer; font-family: var(--ff-sans, 'Google Sans Flex', 'Google Sans', sans-serif); font-size: 15px; color: var(--lumi-sys-color--on-surface-default, #000000); user-select: none; }
 .lumi-checkbox-label input[type="checkbox"] { position: absolute; opacity: 0; width: 0px; height: 0px; pointer-events: none; }
-.lumi-checkbox { position: relative; width: 24px; height: 24px; border-radius: var(--lumi-sys-shape--small, 8px); border: 2px solid var(--lumi-sys-color--on-surface-variant, rgba(0, 0, 0, 0.55)); background-color: transparent; transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-sizing: border-box; }
+.lumi-checkbox { position: relative; width: 24px; height: 24px; border-radius: var(--lumi-sys-shape--small, 8px); border: 2px solid var(--lumi-sys-color--on-surface-variant, rgba(0, 0, 0, 0.62)); background-color: transparent; transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-sizing: border-box; }
 .lumi-checkbox-label:hover .lumi-checkbox { background-color: var(--lumi-sys-color--on-surface-low, rgba(0, 0, 0, 0.04)); border-color: var(--lumi-sys-color--on-surface-default, #000000); }
 .lumi-checkbox-label input[type="checkbox"]:checked ~ .lumi-checkbox, .lumi-checkbox-label input[type="checkbox"]:indeterminate ~ .lumi-checkbox, .lumi-checkbox.is-indeterminate { background-color: var(--lumi-sys-color--on-surface-default, #000000); border-color: transparent; }
 .lumi-checkbox .lumi-checkmark { font-size: 18px; line-height: 1; color: var(--lumi-sys-color--surface, #ffffff); fill: var(--lumi-sys-color--surface, #ffffff); display: none; user-select: none; }
@@ -468,12 +548,12 @@ button.active, button.is-active, button.selected, button.is-selected, button[ari
 .lumi-input-group { display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--xs, 4px); width: 100%; }
 .lumi-input-label { font-family: var(--ff-sans, 'Google Sans Flex', 'Google Sans', sans-serif); font-size: 14px; font-weight: 500; line-height: 20px; color: var(--lumi-sys-color--on-surface-default, #000000); }
 .lumi-input { appearance: none; width: 100%; min-height: 48px; padding: 0px 16px; font-family: var(--ff-sans, 'Google Sans Flex', 'Google Sans', sans-serif); font-size: 15px; font-weight: 400; line-height: 22px; color: var(--lumi-sys-color--on-surface-default, #000000); background-color: var(--lumi-sys-color--surface-bright, #ffffff); border: 1px solid var(--lumi-sys-color--stroke-default, rgba(0, 0, 0, 0.12)); border-radius: var(--lumi-sys-shape--large, 16px); background-clip: padding-box; outline: none; box-sizing: border-box; transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s; }
-.lumi-input::placeholder { color: var(--lumi-sys-color--on-surface-variant, rgba(0, 0, 0, 0.55)); opacity: 0.7; }
+.lumi-input::placeholder { color: var(--lumi-sys-color--on-surface-variant, rgba(0, 0, 0, 0.62)); }
 .lumi-input:hover { border-color: var(--lumi-sys-color--on-surface-default, #000000); }
 .lumi-input:focus, .lumi-input:focus-visible { border-color: var(--lumi-sys-color--accent-fixed, #3186ff); box-shadow: 0 0 0 2px var(--lumi-sys-color--accent-container, rgba(49, 134, 255, 0.25)); }
 textarea.lumi-input, .lumi-input--area { min-height: 100px; padding: 12px 16px; resize: vertical; line-height: 22px; }
 .lumi-input.is-error, .lumi-input-group.is-error .lumi-input { border-color: var(--lumi-sys-color--error, #ff4c45); }
-.lumi-input-helper { font-family: var(--ff-sans, 'Google Sans Flex', 'Google Sans', sans-serif); font-size: 12px; line-height: 16px; color: var(--lumi-sys-color--on-surface-variant, rgba(0, 0, 0, 0.55)); }
+.lumi-input-helper { font-family: var(--ff-sans, 'Google Sans Flex', 'Google Sans', sans-serif); font-size: 12px; line-height: 16px; color: var(--lumi-sys-color--on-surface-variant, rgba(0, 0, 0, 0.62)); }
 .lumi-input-group.is-error .lumi-input-helper, .lumi-input-helper--error { color: var(--lumi-sys-color--error, #ff4c45); }
 .lumi-input:disabled, .lumi-input.is-disabled { opacity: var(--lumi-sys-opacity-state--disabled, 0.38); background-color: var(--lumi-sys-color--surface-dim, #f2f0f0); cursor: not-allowed; }
 
@@ -518,16 +598,16 @@ textarea.lumi-input, .lumi-input--area { min-height: 100px; padding: 12px 16px; 
 .lumi-summary-card { padding: var(--lumi-sys-spacing--l, 16px); background-color: var(--lumi-sys-color--surface-container, #f2f0f0); border-radius: var(--lumi-sys-shape--medium, 12px); color: var(--lumi-sys-color--on-surface-default, #000000); font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 15px; line-height: 20px; box-sizing: border-box; }
 .lumi-link-card { display: flex; align-items: center; justify-content: space-between; padding: var(--lumi-sys-spacing--l, 16px); background-color: var(--lumi-sys-color--surface-container, #f2f0f0); border-radius: var(--lumi-sys-shape--medium, 12px); text-decoration: none; color: var(--lumi-sys-color--on-surface-default, #000000); transition: background-color 0.15s; box-sizing: border-box; }
 .lumi-link-card:hover { background-color: var(--lumi-sys-color--surface-container-high, #e6e6e6); }
-.lumi-attribution-buffer { margin-top: var(--lumi-sys-spacing--xxl, 24px); font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 13px; color: var(--lumi-sys-color--on-surface-de-emphasis, rgba(0, 0, 0, 0.55)); }
+.lumi-attribution-buffer { margin-top: var(--lumi-sys-spacing--xxl, 24px); font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 13px; color: var(--lumi-sys-color--on-surface-de-emphasis, rgba(0, 0, 0, 0.62)); }
 .lumi-card { background-color: var(--lumi-sys-color--surface-dim, #f2f0f0); border-radius: var(--lumi-sys-shape--large-max, 24px); padding: var(--lumi-sys-spacing--3xl, 28px); display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--s, 8px); width: 100%; box-sizing: border-box; }
 .lumi-card-title { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 20px; font-weight: 500; font-variation-settings: "wght" 470, "wdth" 94, "opsz" 20; color: var(--lumi-sys-color--on-surface, #000000); margin: 0px; }
-.lumi-card-subtitle { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 13px; font-weight: 400; font-variation-settings: "wght" 400, "wdth" 92, "opsz" 13; color: var(--lumi-sys-color--on-surface-variant, rgba(0, 0, 0, 0.55)); margin: 0px; }
+.lumi-card-subtitle { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 13px; font-weight: 400; font-variation-settings: "wght" 400, "wdth" 92, "opsz" 13; color: var(--lumi-sys-color--on-surface-variant, rgba(0, 0, 0, 0.62)); margin: 0; }
 .lumi-card-body { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 15px; font-weight: 400; font-variation-settings: "wght" 400, "wdth" 92, "opsz" 15; color: var(--lumi-sys-color--on-surface, #000000); margin: var(--lumi-sys-spacing--xs, 4px) 0 0 0; }
 .lumi-overlay-card { background-color: var(--surface-translucent, rgba(255, 255, 255, 0.88)); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--stroke-default); border-radius: var(--lumi-sys-shape--medium, 12px); padding: var(--lumi-sys-spacing--m, 12px) var(--lumi-sys-spacing--l, 16px); color: var(--on-surface); box-shadow: var(--lumi-sys-elevation--level1); box-sizing: border-box; }
 
 /* --- Progress bar --- */
 .lumi-progress-tracker { display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--xs, 4px); width: 100%; }
-.lumi-progress-bar { width: 100%; height: 8px; background-color: var(--lumi-sys-color--stroke-default, #e3e3e3); border-radius: var(--lumi-sys-shape--full, 999px); overflow: hidden; }
+.lumi-progress-bar { width: 100%; height: 8px; background-color: var(--lumi-sys-color--stroke-default, #e3e3e3); border: 1px solid transparent; box-sizing: border-box; border-radius: var(--lumi-sys-shape--full, 999px); overflow: hidden; }
 .lumi-progress-fill { height: 100%; background-color: var(--lumi-sys-color--accent-fixed, #3186ff); border-radius: var(--lumi-sys-shape--full, 999px); transition: width 0.3s; }
 
 /* --- Accordion (card group variant) --- */
@@ -536,7 +616,7 @@ textarea.lumi-input, .lumi-input--area { min-height: 100px; padding: 12px 16px; 
 .lumi-accordion-group .lumi-accordion-header { padding: var(--lumi-sys-spacing--l, 16px); font-family: var(--ff-sans, sans-serif); font-size: 15px; font-weight: 540; cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center; color: var(--lumi-sys-color--on-surface-default, #000000); }
 .lumi-accordion-group .lumi-accordion-chevron { transition: transform 0.2s; font-size: 12px; }
 .lumi-accordion-group .lumi-accordion-item.active .lumi-accordion-chevron { transform: rotate(180deg); }
-.lumi-accordion-group .lumi-accordion-body { display: none; padding: 0 var(--lumi-sys-spacing--l, 16px) var(--lumi-sys-spacing--l, 16px) var(--lumi-sys-spacing--l, 16px); font-family: var(--ff-sans, sans-serif); font-size: 15px; color: var(--lumi-sys-color--on-surface-de-emphasis, rgba(0, 0, 0, 0.55)); line-height: 20px; }
+.lumi-accordion-group .lumi-accordion-body { display: none; padding: 0 var(--lumi-sys-spacing--l, 16px) var(--lumi-sys-spacing--l, 16px) var(--lumi-sys-spacing--l, 16px); font-family: var(--ff-sans, sans-serif); font-size: 15px; color: var(--lumi-sys-color--on-surface-de-emphasis, rgba(0, 0, 0, 0.62)); line-height: 20px; }
 .lumi-accordion-group .lumi-accordion-item.active .lumi-accordion-body { display: block; }
 
 /* --- Accordion (borderless list variant) --- */
@@ -552,16 +632,16 @@ textarea.lumi-input, .lumi-input--area { min-height: 100px; padding: 12px 16px; 
 
 /* --- Segmented control --- */
 .lumi-segmented-group { display: flex; background-color: var(--lumi-sys-color--surface-container, #f2f0f0); padding: 4px; border-radius: var(--lumi-sys-shape--full, 999px); gap: 4px; }
-.lumi-segmented-btn { flex: 1 1 0%; padding: 8px 16px; border-width: medium; border-style: none; border-color: currentcolor; border-image: none; border-radius: var(--lumi-sys-shape--full, 999px); background-color: transparent; font-family: var(--ff-sans, sans-serif); font-size: 14px; font-weight: 510; cursor: pointer; color: var(--lumi-sys-color--on-surface-de-emphasis, rgba(0, 0, 0, 0.55)); transition: 0.2s; }
-.lumi-segmented-btn.is-active { background-color: var(--lumi-sys-color--surface-bright, #ffffff); color: var(--lumi-sys-color--on-surface-default, #000000); box-shadow: var(--lumi-sys-elevation--level1); }
+.lumi-segmented-btn { flex: 1 1 0%; padding: 8px 16px; border: 1px solid transparent; border-radius: var(--lumi-sys-shape--full, 999px); background-color: transparent; font-family: var(--ff-sans, sans-serif); font-size: 14px; font-weight: 510; cursor: pointer; color: var(--lumi-sys-color--on-surface-de-emphasis, rgba(0, 0, 0, 0.62)); transition: 0.2s; }
+.lumi-segmented-btn.is-active, .lumi-segmented-btn.active, .lumi-segmented-btn.is-selected, .lumi-segmented-btn.selected, .lumi-segmented-btn[aria-pressed="true"], .lumi-segmented-btn[aria-selected="true"] { background-color: var(--lumi-sys-color--surface-bright, #ffffff); color: var(--lumi-sys-color--on-surface-default, #000000); box-shadow: var(--lumi-sys-elevation--level1); }
 
 /* --- Tabs --- */
 .lumi-tab-group { display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--4xl, 36px); width: 100%; }
 .lumi-tab-bar { display: flex; gap: var(--lumi-sys-spacing--l, 16px); padding-bottom: 0px; overflow-x: auto; scrollbar-width: none; }
 .lumi-tab-bar::-webkit-scrollbar { display: none; }
-.lumi-tab { height: 40px; padding: 0 var(--lumi-sys-spacing--xl, 20px); display: flex; align-items: center; justify-content: center; font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 17px; line-height: 24px; font-weight: 370; font-variation-settings: "wght" 370, "wdth" 92, "opsz" 17; color: var(--lumi-sys-color--on-surface-de-emphasis, rgba(0, 0, 0, 0.55)); background: transparent; border-width: medium; border-style: none; border-color: currentcolor; border-image: none; border-radius: var(--lumi-sys-shape--full, 999px); cursor: pointer; white-space: nowrap; transition: background-color 0.15s, color 0.15s; }
+.lumi-tab { height: 40px; padding: 0 var(--lumi-sys-spacing--xl, 20px); display: flex; align-items: center; justify-content: center; font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 17px; line-height: 24px; font-weight: 370; font-variation-settings: "wght" 370, "wdth" 92, "opsz" 17; color: var(--lumi-sys-color--on-surface-de-emphasis, rgba(0, 0, 0, 0.62)); background: transparent; border: 1px solid transparent; border-radius: var(--lumi-sys-shape--full, 999px); cursor: pointer; white-space: nowrap; transition: background-color 0.15s, color 0.15s; }
 .lumi-tab:hover { color: var(--lumi-sys-color--on-surface-default, #000000); }
-.lumi-tab.active { background-color: var(--lumi-sys-color--surface-container-high, #f2f0f0); color: var(--lumi-sys-color--on-surface-default, #000000); font-weight: 510; font-variation-settings: "wght" 510, "wdth" 92, "opsz" 17; }
+.lumi-tab.active, .lumi-tab.is-active, .lumi-tab.is-selected, .lumi-tab.selected, .lumi-tab[aria-pressed="true"], .lumi-tab[aria-selected="true"] { background-color: var(--lumi-sys-color--surface-container-high, #f2f0f0); color: var(--lumi-sys-color--on-surface-default, #000000); font-weight: 510; font-variation-settings: "wght" 510, "wdth" 92, "opsz" 17; }
 .lumi-tab-content { display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--m, 12px); padding-top: 0px; padding-bottom: 0px; }
 .lumi-tab-content .lumi-body-l-emphasized, .lumi-tab-content .lumi-headline-s { margin: 0px; }
 .lumi-tab-content .lumi-body-l { margin: 0px; color: var(--lumi-sys-color--on-surface-default, #000000); }
@@ -574,7 +654,7 @@ textarea.lumi-input, .lumi-input--area { min-height: 100px; padding: 12px 16px; 
 .lumi-pullquote-body { display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--l, 16px); flex: 1 1 0%; min-width: 0px; }
 p.lumi-pullquote-text, .lumi-pullquote-text { font-family: var(--ff-mono, 'Google Sans Code', monospace); font-style: italic; font-weight: 300; font-variation-settings: "wght" 300, "opsz" 22, "MONO" 0; color: var(--lumi-sys-color--on-surface-default, #000000); margin: 0px; font-size: 22px !important; line-height: 30px !important; }
 .lumi-pullquote-cite { display: flex; flex-direction: column; font-style: normal; }
-.lumi-pullquote-cite .lumi-de-emphasis { color: var(--lumi-sys-color--on-surface-de-emphasis, rgba(0, 0, 0, 0.55)); }
+.lumi-pullquote-cite .lumi-de-emphasis { color: var(--lumi-sys-color--on-surface-de-emphasis, rgba(0, 0, 0, 0.62)); }
 
 /* --- Data table (simple) --- */
 .lumi-data-table-container { width: 100%; overflow-x: auto; border-radius: var(--lumi-sys-shape--medium, 12px); border: 1px solid var(--lumi-sys-color--stroke-default, rgba(0, 0, 0, 0.12)); }
@@ -590,7 +670,13 @@ p.lumi-pullquote-text, .lumi-pullquote-text { font-family: var(--ff-mono, 'Googl
 .lumi-table th { padding: 12px 16px 12px 0px; font-size: 17px; line-height: 24px; font-weight: 540; font-variation-settings: "wght" 540, "wdth" 92, "opsz" 17; color: var(--lumi-sys-color--on-surface-default, #000000); border-bottom: 1px solid var(--lumi-sys-color--on-surface-low, rgba(0, 0, 0, 0.08)); }
 .lumi-table td { padding: 16px 16px 16px 0px; font-size: 17px; line-height: 24px; font-weight: 400; font-variation-settings: "wght" 400, "wdth" 92, "opsz" 17; color: var(--lumi-sys-color--on-surface-default, #000000); border-bottom: 1px solid var(--lumi-sys-color--on-surface-low, rgba(0, 0, 0, 0.08)); }
 .lumi-table td:last-child, .lumi-table th:last-child { padding-right: 0px; }
-.lumi-table tr.lumi-table-ellipsis-row td { padding: 16px 0px 0px; border-bottom-width: medium; border-bottom-style: none; border-bottom-color: currentcolor; color: var(--lumi-sys-color--on-surface-variant, rgba(0, 0, 0, 0.55)); }
+.lumi-table tr.lumi-table-ellipsis-row td { padding: 16px 0 0; border-bottom-width: medium; border-bottom-style: none; border-bottom-color: currentcolor; color: var(--lumi-sys-color--on-surface-variant, rgba(0, 0, 0, 0.62)); }
+
+/* --- Sortable Table Headers --- */
+th[aria-sort] { color: var(--lumi-sys-color--on-surface-default, #000000); }
+button.lumi-sort-btn, .lumi-sort-btn { all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; text-align: inherit; width: 100%; justify-content: inherit; border-radius: var(--lumi-sys-shape--small, 4px); }
+button.lumi-sort-btn:hover, .lumi-sort-btn:hover { background-color: var(--lumi-sys-color--on-surface-low, rgba(0, 0, 0, 0.06)) !important; }
+button.lumi-sort-btn:focus-visible, .lumi-sort-btn:focus-visible { outline: 2px solid var(--lumi-sys-color--on-surface-default, #000000) !important; outline-offset: 2px !important; }
 
 /* --- Code block --- */
 .lumi-code-block { background-color: var(--lumi-sys-color--code-background, #000000); border-radius: var(--lumi-sys-shape--xl-max, 40px); padding: 32px; display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--l, 16px); width: 100%; box-sizing: border-box; }
@@ -712,13 +798,23 @@ select.lumi-select:focus-visible {
 [class*=" lumi-chip"].active,
 [class*=" lumi-chip"].is-selected,
 [class*=" lumi-chip"].selected,
+[class*=" lumi-chip"][aria-pressed="true"],
+[class*=" lumi-chip"][aria-selected="true"],
 [class^="lumi-pill"].is-active,
 [class^="lumi-pill"].active,
+[class^="lumi-pill"].is-selected,
+[class^="lumi-pill"].selected,
+[class^="lumi-pill"][aria-pressed="true"],
+[class^="lumi-pill"][aria-selected="true"],
 [class*=" lumi-pill"].is-active,
-[class*=" lumi-pill"].active {
-  color: var(--lumi-sys-color--accent-fixed, #3186ff);
-  background: var(--lumi-sys-color--accent-container, rgba(49, 134, 255, 0.14));
-  border-color: transparent;
+[class*=" lumi-pill"].active,
+[class*=" lumi-pill"].is-selected,
+[class*=" lumi-pill"].selected,
+[class*=" lumi-pill"][aria-pressed="true"],
+[class*=" lumi-pill"][aria-selected="true"] {
+  color: var(--lumi-sys-color--on-surface-default, #000000);
+  background: var(--lumi-sys-color--accent-container, #dcf1ff);
+  border-color: var(--lumi-sys-color--primary, #3186ff);
   font-weight: 600;
 }
 .lumi-chip:focus-visible,
@@ -738,6 +834,157 @@ select.lumi-select:focus-visible {
  *   shapes (rect/path); text never paints a stroke.
  * ============================================================ */
 svg text { stroke: none; paint-order: fill; }
+
+/* ============================================================
+ * 6. HIGH CONTRAST MODE (Windows Forced Colors)
+ *    Ensures buttons, selectable pills/tabs/segments, sliders, and switches
+ *    remain clearly identifiable and convey active/selected state in
+ *    @media (forced-colors: active).
+ * ============================================================ */
+@media (forced-colors: active) {
+  button,
+  .lumi-btn,
+  [class^="lumi-btn-"],
+  [class*=" lumi-btn-"],
+  .lumi-chip,
+  [class^="lumi-chip"],
+  [class*=" lumi-chip"],
+  [class^="lumi-pill"],
+  [class*=" lumi-pill"],
+  .lumi-segmented-btn,
+  .lumi-tab {
+    border: 1px solid ButtonBorder !important;
+  }
+
+  button.active,
+  button.is-active,
+  button.selected,
+  button.is-selected,
+  button[aria-pressed="true"],
+  button[aria-selected="true"],
+  .lumi-btn.active,
+  .lumi-btn.is-active,
+  .lumi-btn.selected,
+  .lumi-btn.is-selected,
+  .lumi-btn[aria-pressed="true"],
+  .lumi-btn[aria-selected="true"],
+  .lumi-chip.active,
+  .lumi-chip.is-active,
+  .lumi-chip.selected,
+  .lumi-chip.is-selected,
+  .lumi-chip[aria-pressed="true"],
+  .lumi-chip[aria-selected="true"],
+  [class^="lumi-chip"].active,
+  [class^="lumi-chip"].is-active,
+  [class^="lumi-chip"].selected,
+  [class^="lumi-chip"].is-selected,
+  [class^="lumi-chip"][aria-pressed="true"],
+  [class*=" lumi-chip"].active,
+  [class*=" lumi-chip"].is-active,
+  [class*=" lumi-chip"].selected,
+  [class*=" lumi-chip"].is-selected,
+  [class*=" lumi-chip"][aria-pressed="true"],
+  [class^="lumi-pill"].active,
+  [class^="lumi-pill"].is-active,
+  [class^="lumi-pill"][aria-pressed="true"],
+  [class*=" lumi-pill"].active,
+  [class*=" lumi-pill"].is-active,
+  [class*=" lumi-pill"][aria-pressed="true"],
+  .lumi-segmented-btn.active,
+  .lumi-segmented-btn.is-active,
+  .lumi-segmented-btn.selected,
+  .lumi-segmented-btn.is-selected,
+  .lumi-segmented-btn[aria-pressed="true"],
+  .lumi-segmented-btn[aria-selected="true"],
+  .lumi-tab.active,
+  .lumi-tab.is-active,
+  .lumi-tab.selected,
+  .lumi-tab.is-selected,
+  .lumi-tab[aria-pressed="true"],
+  .lumi-tab[aria-selected="true"] {
+    forced-color-adjust: none;
+    background-color: Highlight !important;
+    color: HighlightText !important;
+    border-color: Highlight !important;
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+
+  input[type="range"],
+  .lumi-slider {
+    forced-color-adjust: none;
+    width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  input[type="range"]::-webkit-slider-runnable-track,
+  .lumi-slider::-webkit-slider-runnable-track {
+    background-image: none !important;
+    background-color: Canvas !important;
+    border: 1px solid ButtonBorder !important;
+    height: 6px !important;
+  }
+  input[type="range"]::-webkit-slider-thumb,
+  .lumi-slider::-webkit-slider-thumb {
+    background-image: none !important;
+    background-color: ButtonText !important;
+    border: 2px solid Canvas !important;
+    outline: 2px solid ButtonBorder !important;
+    width: 20px !important;
+    height: 20px !important;
+    margin-top: -8px !important;
+  }
+  input[type="range"]:hover::-webkit-slider-thumb,
+  input[type="range"]:focus-visible::-webkit-slider-thumb,
+  .lumi-slider:hover::-webkit-slider-thumb,
+  .lumi-slider:focus-visible::-webkit-slider-thumb {
+    background-color: Highlight !important;
+    outline-color: Highlight !important;
+  }
+
+  .lumi-progress-bar {
+    forced-color-adjust: none;
+    background-color: Canvas !important;
+    border: 1px solid ButtonBorder !important;
+  }
+  .lumi-progress-fill {
+    forced-color-adjust: none;
+    background-color: Highlight !important;
+  }
+
+  .lumi-switch__track {
+    forced-color-adjust: none;
+    background-color: Canvas !important;
+    border: 2px solid ButtonBorder !important;
+  }
+  .lumi-switch__thumb,
+  .lumi-switch__track::after {
+    background-color: ButtonText !important;
+  }
+  .lumi-switch input[type="checkbox"]:checked + .lumi-switch__track {
+    background-color: Highlight !important;
+    border-color: Highlight !important;
+  }
+  .lumi-switch input[type="checkbox"]:checked + .lumi-switch__track .lumi-switch__thumb,
+  .lumi-switch input[type="checkbox"]:checked + .lumi-switch__track::after {
+    background-color: HighlightText !important;
+  }
+
+  .lumi-checkbox {
+    forced-color-adjust: none;
+    border: 2px solid ButtonBorder !important;
+    background-color: Canvas !important;
+  }
+  .lumi-checkbox-label input[type="checkbox"]:checked ~ .lumi-checkbox,
+  .lumi-checkbox-label input[type="checkbox"]:indeterminate ~ .lumi-checkbox {
+    background-color: Highlight !important;
+    border-color: Highlight !important;
+  }
+  .lumi-checkbox .lumi-checkmark {
+    color: HighlightText !important;
+    fill: HighlightText !important;
+  }
+}
 
 </style>
 <style id="lumi-surface-button-fallbacks">
@@ -838,179 +1085,148 @@ button.active, button.is-active, button.selected, button.is-selected, button[ari
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sliding Alignment Puzzle</title>
+  <title>Luminous Slide & Glow</title>
   <style>
-    /* Widget specific layout glue */
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+    
     html, body {
       margin: 0;
       padding: 0;
       width: 100%;
-      height: 100%;
       overflow-x: hidden;
       overflow-y: hidden;
-      font-family: var(--ff-sans, system-ui, sans-serif);
-      color: var(--on-surface);
       background: transparent;
+      font-family: var(--ff-sans, system-ui, -apple-system, sans-serif);
+      color: var(--on-surface);
     }
 
     .widget-container {
       width: 100%;
-      max-width: 680px;
-      margin: 0 auto;
-      padding: var(--spacing-l, 16px);
+      min-height: 280px;
+      padding: var(--lumi-sys-spacing--m, 12px);
+      display: flex;
+      flex-direction: column;
+      gap: var(--lumi-sys-spacing--m, 12px);
       box-sizing: border-box;
-      display: flex;
-      flex-direction: column;
-      gap: var(--spacing-m, 12px);
     }
 
-    .game-card {
-      background: var(--surface-dim);
-      border-radius: var(--r-m, 12px);
-      padding: var(--spacing-l, 16px);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: var(--spacing-l, 16px);
-    }
-
-    .status-bar {
-      width: 100%;
+    .header-card {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: var(--spacing-m, 12px);
-      flex-wrap: wrap;
-    }
-
-    .stats-group {
-      display: flex;
-      align-items: center;
-      gap: var(--spacing-s, 8px);
-    }
-
-    .board-viewport {
-      position: relative;
-      width: 100%;
-      max-width: 360px;
-      aspect-ratio: 1 / 1;
-      background: var(--surface-container);
+      padding: var(--lumi-sys-spacing--m, 12px) var(--lumi-sys-spacing--l, 16px);
+      background: var(--surface-dim);
       border-radius: var(--r-m, 12px);
-      padding: var(--spacing-s, 8px);
-      box-sizing: border-box;
-      user-select: none;
-      touch-action: manipulation;
+      border: 1px solid var(--stroke-default);
     }
 
-    .grid-bg {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      grid-template-rows: repeat(4, 1fr);
-      gap: var(--spacing-s, 8px);
-      width: 100%;
-      height: 100%;
-    }
-
-    .grid-cell-bg {
-      background: var(--surface);
-      border-radius: var(--r-s, 8px);
-      opacity: 0.4;
-    }
-
-    .tiles-layer {
-      position: absolute;
-      inset: var(--spacing-s, 8px);
-    }
-
-    .tile {
-      position: absolute;
-      width: calc((100% - 24px) / 4);
-      height: calc((100% - 24px) / 4);
-      border-radius: var(--r-s, 8px);
+    .header-info {
       display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: var(--ff-mono, monospace);
-      font-size: 24px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: transform 0.22s cubic-bezier(0.2, 0, 0, 1), background-color 0.2s ease, box-shadow 0.2s ease;
-      box-sizing: border-box;
-      background: var(--surface-bright);
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .header-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
       color: var(--on-surface);
-      box-shadow: var(--lumi-sys-elevation--level1, 0 1px 3px rgba(0,0,0,0.1));
+      line-height: 1.2;
     }
 
-    .tile.tile-o {
-      color: var(--primary);
-      border: 2px solid var(--accent-container);
-    }
-
-    .tile.tile-x {
+    .header-sub {
+      margin: 0;
+      font-size: 13px;
       color: var(--on-surface-variant);
-      border: 1px solid var(--outline);
-    }
-
-    .tile.is-movable {
-      cursor: pointer;
-    }
-
-    .tile.is-movable:hover {
-      background: var(--surface-container-high);
-      
-    }
-
-    .tile.is-winning {
-      background: var(--positive-container);
-      color: var(--positive);
-      border-color: var(--positive);
-      animation: pulse-line 0.8s infinite alternate ease-in-out;
-    }
-
-    .tile.is-losing {
-      background: var(--error-container);
-      color: var(--error);
-      border-color: var(--error);
-    }
-
-    @keyframes pulse-line {
-      0% { transform: scale(1); }
-      100% { transform: scale(1.04); }
-    }
-
-    .controls-row {
-      width: 100%;
-      display: flex;
-      justify-content: center;
-      gap: var(--spacing-m, 12px);
+      font-family: var(--ff-mono);
     }
 
     .status-badge {
-      padding: var(--spacing-xs, 4px) var(--spacing-m, 12px);
-      border-radius: var(--r-full, 999px);
-      background: var(--surface-bright);
-      color: var(--on-surface-variant);
       display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: var(--r-full, 999px);
+      font-size: 12px;
+      font-weight: 500;
+      font-family: var(--ff-mono);
+      background: var(--surface-container);
+      color: var(--on-surface-variant);
+      border: 1px solid var(--stroke-default);
+      transition: all 0.2s ease;
+    }
+
+    .status-badge.is-solved {
+      background: var(--positive-container);
+      color: var(--positive);
+      border-color: var(--positive);
+    }
+
+    .status-badge.is-animating {
+      background: var(--accent-container);
+      color: var(--primary);
+      border-color: var(--primary);
+    }
+
+    .widget-viewport {
+      position: relative;
+      width: 100%;
+      height: 340px;
+      overflow: hidden;
+      border-radius: var(--r-m, 12px);
+      background: var(--surface-dim);
+      border: 1px solid var(--stroke-default);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    canvas#puzzleCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .control-deck {
+      display: flex;
+      flex-direction: column;
+      gap: var(--lumi-sys-spacing--m, 12px);
+      padding: var(--lumi-sys-spacing--m, 12px);
+      background: var(--surface-dim);
+      border-radius: var(--r-m, 12px);
+      border: 1px solid var(--stroke-default);
+    }
+
+    .button-group {
+      display: flex;
+      align-items: center;
+      gap: var(--lumi-sys-spacing--s, 8px);
+      width: 100%;
+    }
+
+                            .meta-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      font-family: var(--ff-mono);
+      color: var(--on-surface-variant);
+      padding: 0 4px;
+    }
+
+    .meta-item {
+      display: flex;
       align-items: center;
       gap: 6px;
     }
 
-    .status-badge.status-win {
-      background: var(--positive-container);
-      color: var(--positive);
+    .meta-value {
+      color: var(--on-surface);
       font-weight: 600;
-    }
-
-    .status-badge.status-loss {
-      background: var(--error-container);
-      color: var(--error);
-      font-weight: 600;
-    }
-
-    .goal-callout {
-      width: 100%;
-      box-sizing: border-box;
-      text-align: center;
     }
   </style>
 <script id="lumi-os-theme-init">
@@ -1059,279 +1275,494 @@ button.active, button.is-active, button.selected, button.is-selected, button[ari
 </script>
 </head>
 <body>
-  <div class="widget-container">
-    <header style="display: flex; flex-direction: column; gap: 4px;">
-      <h2 class="lumi-headline-m" style="margin: 0;">Sliding Grid Alignment</h2>
-      <p class="lumi-body-m" style="margin: 0; color: var(--on-surface-variant);">
-        Slide tiles into the empty slot. Align 4 <b style="color: var(--primary);">O</b>s in a row, column, or diagonal to win before 4 <b style="color: var(--on-surface-variant);">X</b>s line up!
-      </p>
-    </header>
 
-    <main class="game-card">
-      <div class="status-bar">
-        <div class="stats-group">
-          <span class="lumi-body-m-emphasized">Moves:</span>
-          <span id="moveCount" class="lumi-code" style="font-size: 16px;">0</span>
-        </div>
-        <div id="statusBadge" class="status-badge lumi-body-s">
-          <span>In Progress</span>
-        </div>
-      </div>
-
-      <div class="board-viewport" id="boardViewport">
-        <div class="grid-bg">
-          <div class="grid-cell-bg"></div><div class="grid-cell-bg"></div><div class="grid-cell-bg"></div><div class="grid-cell-bg"></div>
-          <div class="grid-cell-bg"></div><div class="grid-cell-bg"></div><div class="grid-cell-bg"></div><div class="grid-cell-bg"></div>
-          <div class="grid-cell-bg"></div><div class="grid-cell-bg"></div><div class="grid-cell-bg"></div><div class="grid-cell-bg"></div>
-          <div class="grid-cell-bg"></div><div class="grid-cell-bg"></div><div class="grid-cell-bg"></div><div class="grid-cell-bg"></div>
-        </div>
-        <div class="tiles-layer" id="tilesLayer"></div>
-      </div>
-
-      <div class="controls-row">
-        <button id="btnReset" class="lumi-btn lumi-btn--tonal lumi-btn--small" type="button">Reset Layout</button>
-        <button id="btnShuffle" class="lumi-btn lumi-btn--ghost lumi-btn--small" type="button">Randomize</button>
-      </div>
-    </main>
-
-    <div class="lumi-callout goal-callout">
-      <p class="lumi-body-s" style="margin: 0; color: var(--on-surface-variant);">
-        <b>Target:</b> Form 4-in-a-row with <b>O</b>. Avoid forming 4-in-a-row with <b>X</b>.
-      </p>
+<div class="widget-container">
+  <!-- Header -->
+  <div class="header-card">
+    <div class="header-info">
+      <h2 class="header-title">Slide &amp; Glow Puzzle</h2>
+      <p class="header-sub">Align tiles 1-8 &amp; illuminate all grid slots</p>
+    </div>
+    <div id="statusBadge" class="status-badge is-solved">
+      <span>● Solved</span>
     </div>
   </div>
 
-  <script>
-    // Initial specified dataset layout
-    const INITIAL_GRID = [
-      ['X', 'O', 'X', 'O'],
-      ['X', 'X', 'EMPTY', 'X'],
-      ['O', 'O', 'X', 'X'],
-      ['X', 'O', 'X', 'O']
-    ];
+  <!-- Main Canvas Viewport -->
+  <div class="widget-viewport" id="viewportZone">
+    <canvas id="puzzleCanvas" tabindex="0" role="img" aria-label="3x3 sliding lights out puzzle grid"></canvas>
+  </div>
 
-    // Game State
-    let tiles = []; // Array of { id, val, row, col }
-    let emptyPos = { row: 1, col: 2 };
-    let moveCount = 0;
-    let gameState = 'PLAYING'; // 'PLAYING' | 'WIN' | 'LOSS'
-    let highlightedCoords = [];
+  <!-- Control Deck -->
+  <div class="control-deck">
+    <div class="button-group">
+      <button id="btnShuffle" class="lumi-btn-custom lumi-btn-primary" type="button">
+        Watch Shuffle (Slow)
+      </button>
+      <button id="btnReset" class="lumi-btn-custom lumi-btn-secondary" type="button">
+        Reset to Solved
+      </button>
+    </div>
+    <div class="meta-bar">
+      <div class="meta-item">
+        <span>Moves:</span>
+        <span id="moveCount" class="meta-value">0</span>
+      </div>
+      <div class="meta-item">
+        <span>Lights On:</span>
+        <span id="lightsCount" class="meta-value">9/9</span>
+      </div>
+    </div>
+  </div>
+</div>
 
-    // Initialize tile objects with unique IDs to track DOM element position smoothly
-    function initTilesFromGrid(grid) {
-      tiles = [];
-      let idCounter = 0;
-      for (let r = 0; r < 4; r++) {
-        for (let c = 0; c < 4; c++) {
-          const val = grid[r][c];
-          if (val === 'EMPTY') {
-            emptyPos = { row: r, col: c };
-          } else {
-            tiles.push({
-              id: idCounter++,
-              val: val,
-              row: r,
-              col: c
-            });
-          }
-        }
-      }
-    }
+<script>
+  function getCssVar(name) {
+    if (!name) return '';
+    const clean = name.replace(/^var\(/, '').replace(/\)$/, '').trim();
+    return getComputedStyle(document.documentElement).getPropertyValue(clean.startsWith('--') ? clean : '--' + clean).trim();
+  }
 
-    function isAdjacent(r1, c1, r2, c2) {
-      return (Math.abs(r1 - r2) + Math.abs(c1 - c2)) === 1;
-    }
+  // Contrast logic for neon tiles
+  function contrastText(bgHex) {
+    let c = (bgHex || '').trim().replace('#', '');
+    if (c.length === 3) c = c.split('').map(x => x + x).join('');
+    if (c.length !== 6) return '#1a1a1a';
+    const r = parseInt(c.slice(0, 2), 16);
+    const g = parseInt(c.slice(2, 4), 16);
+    const b = parseInt(c.slice(4, 6), 16);
+    const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    const L = 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    return L > 0.45 ? '#0d130a' : '#ffffff';
+  }
 
-    function checkLines(grid) {
-      const lines = [];
+  // Grid Data Structure: 9 positions (0..8)
+  // Each slot holds a tile object: { val: 0..8, isOn: boolean }
+  let grid = [];
+  let moveCount = 0;
+  let isAnimating = false;
+  let animationQueue = [];
+  let currentAnim = null; // { tileVal, startPos, endPos, progress, duration }
+  let lastTime = 0;
+  let rafId = null;
 
-      // Rows
-      for (let r = 0; r < 4; r++) {
-        lines.push([[r, 0], [r, 1], [r, 2], [r, 3]]);
-      }
-      // Cols
-      for (let c = 0; c < 4; c++) {
-        lines.push([[0, c], [1, c], [2, c], [3, c]]);
-      }
-      // Diagonals
-      lines.push([[0, 0], [1, 1], [2, 2], [3, 3]]);
-      lines.push([[0, 3], [1, 2], [2, 1], [3, 0]]);
+  const canvas = document.getElementById('puzzleCanvas');
+  const ctx = canvas.getContext('2d');
+  const btnShuffle = document.getElementById('btnShuffle');
+  const btnReset = document.getElementById('btnReset');
+  const statusBadge = document.getElementById('statusBadge');
+  const moveCountEl = document.getElementById('moveCount');
+  const lightsCountEl = document.getElementById('lightsCount');
 
-      let winLine = null;
-      let lossLine = null;
-
-      for (const line of lines) {
-        const vals = line.map(([r, c]) => grid[r][c]);
-        if (vals.every(v => v === 'O')) {
-          winLine = line;
-          break;
-        }
-        if (vals.every(v => v === 'X')) {
-          lossLine = line;
-        }
-      }
-
-      if (winLine) return { result: 'WIN', line: winLine };
-      if (lossLine) return { result: 'LOSS', line: lossLine };
-      return { result: 'PLAYING', line: [] };
-    }
-
-    function getCurrentGrid() {
-      const grid = [
-        ['EMPTY', 'EMPTY', 'EMPTY', 'EMPTY'],
-        ['EMPTY', 'EMPTY', 'EMPTY', 'EMPTY'],
-        ['EMPTY', 'EMPTY', 'EMPTY', 'EMPTY'],
-        ['EMPTY', 'EMPTY', 'EMPTY', 'EMPTY']
-      ];
-      tiles.forEach(t => {
-        grid[t.row][t.col] = t.val;
+  // Initialize Solved State
+  function initSolvedState() {
+    grid = [];
+    for (let i = 0; i < 9; i++) {
+      grid.push({
+        val: (i === 8) ? 0 : i + 1,
+        isOn: true
       });
-      return grid;
     }
+    moveCount = 0;
+    animationQueue = [];
+    currentAnim = null;
+    updateUI();
+  }
 
-    function evaluateBoardState() {
-      const grid = getCurrentGrid();
-      const status = checkLines(grid);
-      gameState = status.result;
-      highlightedCoords = status.line;
-    }
+  function getEmptyIndex() {
+    return grid.findIndex(t => t.val === 0);
+  }
 
-    function handleTileClick(tile) {
-      if (gameState !== 'PLAYING') return;
-      if (!isAdjacent(tile.row, tile.col, emptyPos.row, emptyPos.col)) return;
+  function getValidNeighbors(idx) {
+    const row = Math.floor(idx / 3);
+    const col = idx % 3;
+    const neighbors = [];
+    if (row > 0) neighbors.push(idx - 3);
+    if (row < 2) neighbors.push(idx + 3);
+    if (col > 0) neighbors.push(idx - 1);
+    if (col < 2) neighbors.push(idx + 1);
+    return neighbors;
+  }
 
-      // Swap position
-      const tempRow = tile.row;
-      const tempCol = tile.col;
-      tile.row = emptyPos.row;
-      tile.col = emptyPos.col;
-      emptyPos = { row: tempRow, col: tempCol };
+  function isAdjacent(idx1, idx2) {
+    const r1 = Math.floor(idx1 / 3), c1 = idx1 % 3;
+    const r2 = Math.floor(idx2 / 3), c2 = idx2 % 3;
+    return Math.abs(r1 - r2) + Math.abs(c1 - c2) === 1;
+  }
 
+  // Toggle light state of target index + its orthogonal neighbors
+  function toggleLightsOut(targetIdx) {
+    const targets = [targetIdx, ...getValidNeighbors(targetIdx)];
+    targets.forEach(i => {
+      grid[i].isOn = !grid[i].isOn;
+    });
+  }
+
+  // Move tile at position `fromIdx` to empty position `toIdx`
+  function applyMove(fromIdx, toIdx, isManual = true) {
+    if (!isAdjacent(fromIdx, toIdx)) return false;
+
+    // Swap tiles in grid array
+    const temp = grid[fromIdx];
+    grid[fromIdx] = grid[toIdx];
+    grid[toIdx] = temp;
+
+    // Toggle lights centered at the moved tile's new position
+    toggleLightsOut(toIdx);
+
+    if (isManual) {
       moveCount++;
-      evaluateBoardState();
-      updateViz();
+    }
+    updateUI();
+    return true;
+  }
+
+  function checkVictory() {
+    for (let i = 0; i < 8; i++) {
+      if (grid[i].val !== i + 1) return false;
+    }
+    if (grid[8].val !== 0) return false;
+    return grid.every(t => t.isOn);
+  }
+
+  function updateUI() {
+    if (moveCountEl) moveCountEl.textContent = moveCount;
+    const onCount = grid.filter(t => t.isOn).length;
+    if (lightsCountEl) lightsCountEl.textContent = `${onCount}/9`;
+
+    const victory = checkVictory();
+    if (isAnimating) {
+      statusBadge.className = 'status-badge is-animating';
+      if (statusBadge) statusBadge.innerHTML = '<span>● Shuffling...</span>';
+      btnShuffle.disabled = true;
+      btnReset.disabled = true;
+    } else if (victory) {
+      statusBadge.className = 'status-badge is-solved';
+      if (statusBadge) statusBadge.innerHTML = '<span>★ Solved!</span>';
+      btnShuffle.disabled = false;
+      btnReset.disabled = false;
+    } else {
+      statusBadge.className = 'status-badge';
+      statusBadge.style.background = getCssVar('--surface-container');
+      statusBadge.style.color = getCssVar('--on-surface');
+      statusBadge.style.borderColor = getCssVar('--stroke-default');
+      if (statusBadge) statusBadge.innerHTML = '<span>● Playing</span>';
+      btnShuffle.disabled = false;
+      btnReset.disabled = false;
+    }
+  }
+
+  // Trigger Slow Motion Step-by-Step Shuffle
+  function triggerSlowShuffle() {
+    if (isAnimating) return;
+
+    // Reset to solved base first
+    initSolvedState();
+    isAnimating = true;
+    btnShuffle.disabled = true;
+    btnReset.disabled = true;
+
+    // Generate 15 legal random moves
+    const steps = 15;
+    let tempGridPos = 8; // empty pos
+    let lastFrom = -1;
+    const shuffleSequence = [];
+
+    for (let s = 0; s < steps; s++) {
+      const neighbors = getValidNeighbors(tempGridPos).filter(n => n !== lastFrom);
+      const chosenFrom = neighbors[Math.floor(Math.random() * neighbors.length)];
+      shuffleSequence.push({ from: chosenFrom, to: tempGridPos });
+      lastFrom = tempGridPos;
+      tempGridPos = chosenFrom;
     }
 
-    function renderDOMTilesOnce() {
-      const layer = document.getElementById('tilesLayer');
-      if (layer) layer.innerHTML = '';
-      tiles.forEach(tile => {
-        const el = document.createElement('div');
-        el.id = `tile-node-${tile.id}`;
-        if (el) el.textContent = tile.val;
-        el.addEventListener('click', () => handleTileClick(tile));
-        layer.appendChild(el);
-      });
-    }
+    // Queue steps with step duration
+    let queueDelay = 0;
+    const STEP_DURATION = 260; // ms per slide
+    const PAUSE_BETWEEN = 90;   // ms pause
 
-    function updateViz() {
-      // 1. Update move count
-      document.getElementById('moveCount').textContent = moveCount;
+    shuffleSequence.forEach((move, i) => {
+      setTimeout(() => {
+        // Start slide animation for step
+        const tileVal = grid[move.from].val;
+        currentAnim = {
+          fromIdx: move.from,
+          toIdx: move.to,
+          tileVal: tileVal,
+          startTime: performance.now(),
+          duration: STEP_DURATION
+        };
+      }, queueDelay);
 
-      // 2. Update status badge
-      const statusBadge = document.getElementById('statusBadge');
-      if (gameState === 'WIN') {
-        statusBadge.className = 'status-badge status-win lumi-body-s';
-        if (statusBadge) statusBadge.innerHTML = '<span>Victory! 4 O\'s Aligned</span>';
-      } else if (gameState === 'LOSS') {
-        statusBadge.className = 'status-badge status-loss lumi-body-s';
-        if (statusBadge) statusBadge.innerHTML = '<span>Blocked! 4 X\'s Aligned</span>';
-      } else {
-        statusBadge.className = 'status-badge lumi-body-s';
-        if (statusBadge) statusBadge.innerHTML = '<span>In Progress</span>';
-      }
-
-      // 3. Update position & style of each tile DOM node
-      tiles.forEach(tile => {
-        const el = document.getElementById(`tile-node-${tile.id}`);
-        if (!el) return;
-
-        const movable = gameState === 'PLAYING' && isAdjacent(tile.row, tile.col, emptyPos.row, emptyPos.col);
-        const isHighlight = highlightedCoords.some(([r, c]) => r === tile.row && c === tile.col);
-
-        let classList = `tile tile-${tile.val.toLowerCase()}`;
-        if (movable) classList += ' is-movable';
-        if (isHighlight) {
-          classList += (gameState === 'WIN') ? ' is-winning' : ' is-losing';
-        }
-
-        el.className = classList;
-
-        // Position using CSS calc offsets
-        const leftPercent = tile.col * 25;
-        const topPercent = tile.row * 25;
-        const gapOffsetCol = tile.col * 2; // px offset calculation handled neatly via flex/grid or percent
-        
-        // Percent transform translation for pixel-perfect tile placement in responsive board
-        // Using transform scale / offset based on column and row step
-        // Each tile is width: calc((100% - 24px) / 4)
-        // Step X = calc(100% / 4 + 0px), using standard percentage positions with pixel gap corrections:
-        const xExpr = `calc(${tile.col * 100}% + ${tile.col * 8}px)`;
-        const yExpr = `calc(${tile.row * 100}% + ${tile.row * 8}px)`;
-
-        el.style.transform = `translate3d(${xExpr}, ${yExpr}, 0)`;
-      });
-    }
-
-    function resetToInitial() {
-      moveCount = 0;
-      gameState = 'PLAYING';
-      highlightedCoords = [];
-      initTilesFromGrid(INITIAL_GRID);
-      evaluateBoardState();
-      renderDOMTilesOnce();
-      updateViz();
-    }
-
-    function shuffleBoard() {
-      resetToInitial();
-      // Perform 30 random valid moves
-      for (let i = 0; i < 35; i++) {
-        const adjTiles = tiles.filter(t => isAdjacent(t.row, t.col, emptyPos.row, emptyPos.col));
-        if (adjTiles.length > 0) {
-          const randomTile = adjTiles[Math.floor(Math.random() * adjTiles.length)];
-          const tempRow = randomTile.row;
-          const tempCol = randomTile.col;
-          randomTile.row = emptyPos.row;
-          randomTile.col = emptyPos.col;
-          emptyPos = { row: tempRow, col: tempCol };
-        }
-      }
-      moveCount = 0;
-      evaluateBoardState();
-      updateViz();
-    }
-
-    // Controls setup
-    document.getElementById('btnReset').addEventListener('click', resetToInitial);
-    document.getElementById('btnShuffle').addEventListener('click', shuffleBoard);
-
-    // Initial boot
-    resetToInitial();
-
-    // Theme & Resize Sync
-    const applyTheme = t => { 
-      document.documentElement.setAttribute('data-theme', t); 
-      if (typeof updateViz === 'function') updateViz(); 
-    };
-    if (!document.documentElement.hasAttribute('data-theme') && window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
-      applyTheme('dark');
-    }
-    window.addEventListener('message', e => { 
-      if (e.data?.type === 'set-theme' || e.data?.type === 'APPLY_THEME') applyTheme(e.data.theme); 
+      queueDelay += STEP_DURATION + PAUSE_BETWEEN;
     });
 
-    (function autoResize() {
-      function notifyHeight() {
-        const c = document.querySelector('.widget-container') || document.body;
-        if (!c) return;
-        const h = Math.ceil(Math.max(c.getBoundingClientRect().bottom, c.scrollHeight));
-        window.parent.postMessage({type: 'widget-resize', height: h}, '*');
+    // Complete shuffle sequence
+    setTimeout(() => {
+      isAnimating = false;
+      moveCount = 0; // Reset player moves count for game start
+      updateUI();
+    }, queueDelay + 50);
+  }
+
+  // Canvas Geometry & Rendering
+  function render(now) {
+    if (!canvas.parentElement) return;
+
+    const box = canvas.parentElement;
+    const w = box.clientWidth || 340;
+    const h = box.clientHeight || 340;
+    const dpr = window.devicePixelRatio || 1;
+
+    if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+    }
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+
+    // Grid sizing
+    const padding = 16;
+    const gap = 10;
+    const gridDim = Math.min(w, h) - padding * 2;
+    const tileSize = (gridDim - gap * 2) / 3;
+    const startX = (w - gridDim) / 2;
+    const startY = (h - gridDim) / 2;
+
+    // Resolve color tokens
+    const neonBright = getCssVar('--chart-4') || '#c8f585'; // Bright yellow-green
+    const darkSlate = getCssVar('--surface-container-high') || '#1c1c1c';
+    const gridBg = getCssVar('--surface-dim') || '#141414';
+    const strokeCol = getCssVar('--stroke-default') || '#2d2f38';
+    const textDark = contrastText(neonBright);
+    const textMuted = getCssVar('--on-surface-variant') || 'rgba(255,255,255,0.6)';
+
+    // Draw Board Frame
+    ctx.fillStyle = gridBg;
+    ctx.strokeStyle = strokeCol;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(startX - 6, startY - 6, gridDim + 12, gridDim + 12, 16);
+    ctx.fill();
+    ctx.stroke();
+
+    // Helper: calculate X,Y for grid index 0..8
+    function getTilePos(idx) {
+      const r = Math.floor(idx / 3);
+      const c = idx % 3;
+      return {
+        x: startX + c * (tileSize + gap),
+        y: startY + r * (tileSize + gap)
+      };
+    }
+
+    // Process active sliding animation step
+    let activeFrom = -1;
+    let activeTo = -1;
+    let animPos = null;
+
+    if (currentAnim) {
+      const elapsed = now - currentAnim.startTime;
+      let t = Math.min(1, elapsed / currentAnim.duration);
+      // Ease out cubic
+      t = 1 - Math.pow(1 - t, 3);
+
+      const pStart = getTilePos(currentAnim.fromIdx);
+      const pEnd = getTilePos(currentAnim.toIdx);
+
+      animPos = {
+        x: pStart.x + (pEnd.x - pStart.x) * t,
+        y: pStart.y + (pEnd.y - pStart.y) * t,
+        tileVal: currentAnim.tileVal,
+        isOn: grid[currentAnim.fromIdx].isOn
+      };
+
+      activeFrom = currentAnim.fromIdx;
+      activeTo = currentAnim.toIdx;
+
+      if (elapsed >= currentAnim.duration) {
+        applyMove(currentAnim.fromIdx, currentAnim.toIdx, false);
+        currentAnim = null;
       }
-      window.addEventListener('load', () => setTimeout(notifyHeight, 120));
-      new ResizeObserver(() => notifyHeight()).observe(document.querySelector('.widget-container') || document.body);
-    })();
-  </script>
+    }
+
+    // Draw static slots & non-animating tiles
+    for (let i = 0; i < 9; i++) {
+      const pos = getTilePos(i);
+      const tile = grid[i];
+
+      // Empty slot placeholder
+      if (tile.val === 0 || i === activeFrom) {
+        ctx.fillStyle = getCssVar('--surface') || '#0f0f0f';
+        ctx.strokeStyle = getCssVar('--outline') || '#727676';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(pos.x, pos.y, tileSize, tileSize, 12);
+        ctx.fill();
+        ctx.stroke();
+        continue;
+      }
+
+      // Skip tile currently being animated (drawn in top layer)
+      drawSingleTile(ctx, pos.x, pos.y, tileSize, tile.val, tile.isOn, neonBright, darkSlate, textDark, textMuted);
+    }
+
+    // Draw animating tile on top
+    if (animPos) {
+      drawSingleTile(ctx, animPos.x, animPos.y, tileSize, animPos.tileVal, animPos.isOn, neonBright, darkSlate, textDark, textMuted);
+    }
+
+    ctx.restore();
+    rafId = requestAnimationFrame(render);
+  }
+
+  function drawSingleTile(ctx, x, y, size, val, isOn, neonBright, darkSlate, textDark, textMuted) {
+    ctx.save();
+
+    // Tile Fill & Shadow
+    if (isOn) {
+      ctx.fillStyle = neonBright;
+      ctx.shadowColor = neonBright;
+      ctx.shadowBlur = 12;
+      ctx.strokeStyle = neonBright;
+    } else {
+      ctx.fillStyle = darkSlate;
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = getCssVar('--outline') || '#727676';
+    }
+
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(x, y, size, size, 12);
+    ctx.fill();
+    ctx.stroke();
+
+    // Reset shadow for text
+    ctx.shadowBlur = 0;
+
+    // Tile Number Typography
+    ctx.fillStyle = isOn ? textDark : textMuted;
+    ctx.font = `600 ${Math.floor(size * 0.42)}px var(--ff-sans, sans-serif)`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(val, x + size / 2, y + size / 2 + 1);
+
+    // Indicator Dot for Light Status
+    ctx.beginPath();
+    ctx.arc(x + size - 12, y + 12, 4, 0, Math.PI * 2);
+    ctx.fillStyle = isOn ? textDark : 'rgba(255,255,255,0.2)';
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  // Handle Manual User Click
+  function handleCanvasClick(e) {
+    if (isAnimating || currentAnim) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    const box = canvas.parentElement;
+    const w = box.clientWidth || 340;
+    const h = box.clientHeight || 340;
+
+    const padding = 16;
+    const gap = 10;
+    const gridDim = Math.min(w, h) - padding * 2;
+    const tileSize = (gridDim - gap * 2) / 3;
+    const startX = (w - gridDim) / 2;
+    const startY = (h - gridDim) / 2;
+
+    // Detect tile clicked
+    for (let i = 0; i < 9; i++) {
+      const r = Math.floor(i / 3);
+      const c = i % 3;
+      const x = startX + c * (tileSize + gap);
+      const y = startY + r * (tileSize + gap);
+
+      if (clickX >= x && clickX <= x + tileSize && clickY >= y && clickY <= y + tileSize) {
+        const emptyIdx = getEmptyIndex();
+        if (isAdjacent(i, emptyIdx)) {
+          // Trigger manual smooth slide
+          currentAnim = {
+            fromIdx: i,
+            toIdx: emptyIdx,
+            tileVal: grid[i].val,
+            startTime: performance.now(),
+            duration: 160
+          };
+          // Mark manual count update on completion inside render step
+        }
+        break;
+      }
+    }
+  }
+
+  // Event Listeners & Bootstrapping
+  canvas.addEventListener('click', handleCanvasClick);
+  canvas.addEventListener('keydown', (e) => {
+    if (isAnimating || currentAnim) return;
+    const emptyIdx = getEmptyIndex();
+    const r = Math.floor(emptyIdx / 3);
+    const c = emptyIdx % 3;
+    let target = -1;
+
+    if (e.key === 'ArrowUp' && r < 2) target = emptyIdx + 3;
+    else if (e.key === 'ArrowDown' && r > 0) target = emptyIdx - 3;
+    else if (e.key === 'ArrowLeft' && c < 2) target = emptyIdx + 1;
+    else if (e.key === 'ArrowRight' && c > 0) target = emptyIdx - 1;
+
+    if (target !== -1) {
+      currentAnim = {
+        fromIdx: target,
+        toIdx: emptyIdx,
+        tileVal: grid[target].val,
+        startTime: performance.now(),
+        duration: 160
+      };
+    }
+  });
+
+  btnShuffle.addEventListener('click', triggerSlowShuffle);
+  btnReset.addEventListener('click', () => {
+    if (isAnimating) return;
+    initSolvedState();
+  });
+
+  // Init Game State & Render Loop
+  initSolvedState();
+  rafId = requestAnimationFrame(render);
+
+  // Theme & Auto-Resize Handlers
+  const applyTheme = t => {
+    document.documentElement.setAttribute('data-theme', t);
+    updateUI();
+  };
+  if (!document.documentElement.hasAttribute('data-theme') && window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
+    applyTheme('dark');
+  }
+  window.addEventListener('message', e => {
+    if (e.data?.type === 'set-theme' || e.data?.type === 'APPLY_THEME') {
+      applyTheme(e.data.theme);
+    }
+  });
+
+  (function autoResize() {
+    function notifyHeight() {
+      const c = document.querySelector('.widget-container') || document.body;
+      if (!c) return;
+      const h = Math.ceil(Math.max(c.getBoundingClientRect().bottom, c.scrollHeight));
+      window.parent.postMessage({ type: 'widget-resize', height: h }, '*');
+    }
+    window.addEventListener('load', () => setTimeout(notifyHeight, 120));
+    new ResizeObserver(() => notifyHeight()).observe(document.querySelector('.widget-container') || document.body);
+  })();
+</script>
 
 <script>/*luminous-slider-normalizer*/(function(){function f(r){if(!r||r.type!=='range')return;var mn=parseFloat(r.min||'0'),mx=parseFloat(r.max||'100'),v=parseFloat(r.value);if(isNaN(v))v=(mn+mx)/2;var p=mx>mn?((v-mn)/(mx-mn))*100:50;r.style.setProperty('--progress',p+'%');r.style.removeProperty('--slider-fill');}function all(){document.querySelectorAll('input[type="range"], .lumi-slider').forEach(f);}document.addEventListener('input',function(e){f(e.target);});if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',all);else all();})();</script>
 </body>
