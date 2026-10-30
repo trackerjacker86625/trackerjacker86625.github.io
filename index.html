@@ -1,1770 +1,1819 @@
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<script id="lumi-getcssvar">
-window.getCssVar = window.getCssVar || function(name, fallback) {
-  try {
-    var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    return v || fallback || '';
-  } catch (e) { return fallback || ''; }
-};
-</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sliding Lights Puzzle</title>
 
-<script id="lumi-canvas-guard">
-(function() {
-  if (window.__lumiCanvasGuard) return;
-  window.__lumiCanvasGuard = true;
-  var MAX_PX = 4096, MIN_FONT_PX = 12;
-  try {
-    var CP = HTMLCanvasElement.prototype;
-    var BOX = {width: 'clientWidth', height: 'clientHeight'}, D = {};
-    Object.keys(BOX).forEach(function(p) {
-      D[p] = Object.getOwnPropertyDescriptor(CP, p);
-    });
-    var tracking = function(el, p) {
-      var box = el[BOX[p]];
-      return !el.style[p] && box > 0 && box === D[p].get.call(el) &&
-          box === el['__lumiLast' + p];
-    };
-    var MAX = {width: 'maxWidth', height: 'maxHeight'};
-    var PAD = {width: ['paddingLeft', 'paddingRight'],
-               height: ['paddingTop', 'paddingBottom']};
-    var avail = function(el, p) {
-      var pe = el.parentElement;
-      if (!pe) return 0;
-      var cs = getComputedStyle(pe);
-      return pe[BOX[p]] - parseFloat(cs[PAD[p][0]]) -
-          parseFloat(cs[PAD[p][1]]);
-    };
-    Object.keys(BOX).forEach(function(p) {
-      var d = D[p];
-      if (!d || !d.set || !d.get) return;
-      Object.defineProperty(CP, p, {
-        configurable: true, enumerable: d.enumerable, get: d.get,
-        set: function(v) {
-          var n = +v, box = this[BOX[p]];
-          if (n > MAX_PX) n = MAX_PX;
-          if (n > box && tracking(this, p)) {
-            var el = this, pins = {};
-            Object.keys(BOX).forEach(function(q) {
-              if (tracking(el, q)) pins[q] = avail(el, q) ||
-                  el['__lumiBox' + q];
-            });
-            Object.keys(pins).forEach(function(q) {
-              el.style[q] = '100%';
-              el.style[MAX[q]] = pins[q] + 'px';
-            });
-            n = box;
-          }
-          this['__lumiBox' + p] = box;
-          this['__lumiLast' + p] = n;
-          d.set.call(this, isNaN(n) ? v : n);
-        }
-      });
-    });
-  } catch (e) {}
-  try {
-    var XP = CanvasRenderingContext2D.prototype;
-    var px = /(\d*\.?\d+)px/;
-    var floorFont = function(ctx) {
-      var f = ctx.font, m = px.exec(f);
-      if (m && +m[1] >= 4 && +m[1] < MIN_FONT_PX) ctx.font = f.replace(px, MIN_FONT_PX + 'px');
-    };
-    ['fillText', 'strokeText', 'measureText'].forEach(function(k) {
-      var o = XP[k];
-      if (typeof o !== 'function') return;
-      XP[k] = function() { floorFont(this); return o.apply(this, arguments); };
-    });
-  } catch (e) {}
-})();
-</script>
-
-<style id="lumi-runtime">
-/* luminous.css */
-/*
- * Luminous runtime stylesheet — injected once into every generated widget's
- * <head> by the C++ widget agent (id="lumi-runtime"). Single Source of Truth
- * for ALL design tokens and pre-baked .lumi-* component classes. The SI prompts
- * (design.md / html_generation.jinja2 / chart.jinja2) must NOT re-declare these
- * tokens or component CSS; they only reference them.
- *
- * Sections:
- *   1. Web fonts (Google Sans Flex + Google Sans Code)
- *   2. Light token :root (from previewer tokens.css, verbatim)
- *   3. Dark token overrides — REMAPPED to :root so canvas/D3 readers of
- *      getComputedStyle(document.documentElement) resolve dark values (D3).
- *   4. Short diagram/chart aliases (bridge legacy --surface / --chart-N names).
- *   5. In-scope pre-baked .lumi-* component classes.
- */
-
-/* ============================================================
- * 1. WEB FONTS  (Google Sans Flex + Google Sans Code only)
- *    Material Symbols Outlined is intentionally NOT loaded: no in-scope
- *    .lumi-* control has a functional CSS glyph dependency on it, and the
- *    icon ban forbids decorative icons (Decision D2).
- * ============================================================ */
-@import url('https://fonts.googleapis.com/css2?family=Google+Sans+Flex:ital,wght@0,300..700;1,300..700&family=Google+Sans+Code:ital,wght,MONO@0,300..700,0..1;1,300..700,0..1&display=swap');
-
-/* ============================================================
- * 2. LIGHT TOKENS (:root)
- * ============================================================ */
-:root {
-  --body-bg: transparent;
-  --ff-sans: 'Google Sans Flex', 'Google Sans Text', 'Google Sans', sans-serif;
-  --ff-mono: 'Google Sans Code', 'Google Sans Mono', monospace;
-
-  --lumi-sys-spacing--xxs: 2px;
-  --lumi-sys-spacing--xs: 4px;
-  --lumi-sys-spacing--s: 8px;
-  --lumi-sys-spacing--m: 12px;
-  --lumi-sys-spacing--l: 16px;
-  --lumi-sys-spacing--xl: 20px;
-  --lumi-sys-spacing--xxl: 24px;
-  --lumi-sys-spacing--3xl: 28px;
-  --lumi-sys-spacing--4xl: 36px;
-
-  --lumi-sys-shape--none: 0px;
-  --lumi-sys-shape--extra-small: 4px;
-  --lumi-sys-shape--small: 8px;
-  --lumi-sys-shape--medium: 12px;
-  --lumi-sys-shape--large: 16px;
-  --lumi-sys-shape--large-increased: 20px;
-  --lumi-sys-shape--large-max: 24px;
-  --lumi-sys-shape--xl: 28px;
-  --lumi-sys-shape--xl-increased: 32px;
-  --lumi-sys-shape--xl-max: 40px;
-  --lumi-sys-shape--xxl: 48px;
-  --lumi-sys-shape--xxl-increased: 56px;
-  --lumi-sys-shape--full: 999px;
-
-  --lumi-sys-elevation--level1: 0 0 20px 0 rgba(0, 0, 0, 0.04);
-  --lumi-sys-elevation--level2: 0 0 20px 0 rgba(0, 0, 0, 0.11);
-
-  --lumi-sys-color--surface: #fdfcfc;
-  --lumi-sys-color--surface-dim: #f2f0f0;
-  --lumi-sys-color--surface-bright: #ffffff;
-  --lumi-sys-color--surface-background: #fdfcfc;
-  --lumi-sys-color--surface-accent: #9dd2ff;
-  --lumi-sys-color--surface-container: #f2f0f0;
-  --lumi-sys-color--surface-container-high: #e6e6e6;
-  --lumi-sys-color--surface-translucent: rgba(255, 255, 255, 0.88);
-  --lumi-sys-color--on-surface: #000000;
-  --lumi-sys-color--on-surface-default: #000000;
-  --lumi-sys-color--on-surface-variant: rgba(0, 0, 0, 0.62);
-  --lumi-sys-color--on-surface-de-emphasis: rgba(0, 0, 0, 0.62);
-  --lumi-sys-color--on-surface-low: rgba(0, 0, 0, 0.08);
-  --lumi-sys-color--positive: #008052;
-  --lumi-sys-color--positive-container: #daf9d4;
-  --lumi-sys-color--on-positive-container: #009954;
-  --lumi-sys-color--error: #de2d29;
-  --lumi-sys-color--error-container: #ffdeec;
-  --lumi-sys-color--on-error-container: #de2d29;
-  --lumi-sys-color--accent: #9dd2ff;
-  --lumi-sys-color--accent-container: #dcf1ff;
-  --lumi-sys-color--accent-fixed: #3186ff;
-  --lumi-sys-color--primary: #3186ff;
-  --lumi-sys-color--on-primary: #ffffff;
-  --lumi-sys-color--black: #000000;
-  --lumi-sys-color--white: #ffffff;
-  --lumi-sys-color--outline: #727676;
-  --lumi-sys-color--stroke-default: #e3e3e3;
-
-  --lumi-sys-opacity-state--hover: 0.08;
-  --lumi-sys-opacity-state--focus: 0.08;
-  --lumi-sys-opacity-state--pressed: 0.12;
-  --lumi-sys-opacity-state--disabled: 0.12;
-  --lumi-sys-opacity-state--disabled-label: 0.38;
-
-  --lumi-sys-color--code-background: #000000;
-  --lumi-sys-color--code-primary-text: #ffffff;
-  --lumi-sys-color--code-blue-text: #4fa0ff;
-  --lumi-sys-color--code-green-text: #60d673;
-  --lumi-sys-color--code-grey-text: #808080;
-  --lumi-sys-color--code-pink-text: #ff96da;
-  --lumi-sys-color--code-purple-text: #969dff;
-  --lumi-sys-color--code-red-text: #ff5a59;
-  --lumi-sys-color--code-yellow-text: #ffdb0f;
-
-  --lumi-sys-color--chart-series-1: #2575fc;
-  --lumi-sys-color--chart-series-2: #5b6e9e;
-  --lumi-sys-color--chart-series-3: #228a49;
-  --lumi-sys-color--chart-series-4: #62991b;
-  --lumi-sys-color--chart-series-5: #1e564d;
-  --lumi-sys-color--chart-series-6: #526a45;
-  --lumi-sys-color--chart-series-7: #2780c4;
-  --lumi-sys-color--chart-series-8: #997112;
-  --lumi-sys-color--chart-series-9: #705ec2;
-  --lumi-sys-color--chart-series-10: #c84288;
-}
-
-/* ============================================================
- * 3. DARK TOKENS  (REMAPPED to :root — Decision D3)
- *    Canvas / Chart.js / D3 read getComputedStyle(document.documentElement);
- *    the theme-sync listener sets data-theme="dark" on <html>, so dark values
- *    MUST live on :root (not scoped to body) to prevent black-chart regressions.
- * ============================================================ */
-:root[data-theme="dark"],
-body.dark-mode,
-:root[data-theme="dark"] body {
-  --body-bg: #0f0f0f;
-  --lumi-sys-elevation--level1: 0 0 20px 0 rgba(0, 0, 0, 0.28);
-  --lumi-sys-elevation--level2: 0 0 20px 0 rgba(0, 0, 0, 0.40);
-
-  --lumi-sys-color--surface: #0f0f0f;
-  --lumi-sys-color--surface-dim: #141414;
-  --lumi-sys-color--surface-bright: #1c1c1c;
-  --lumi-sys-color--surface-background: #0f0f0f;
-  --lumi-sys-color--surface-accent: #14204f;
-  --lumi-sys-color--surface-container: #141414;
-  --lumi-sys-color--surface-container-high: #1c1c1c;
-  --lumi-sys-color--surface-translucent: rgba(24, 24, 27, 0.88);
-  --lumi-sys-color--on-surface: #e0e0e0;
-  --lumi-sys-color--on-surface-default: #e0e0e0;
-  --lumi-sys-color--on-surface-variant: rgba(255, 255, 255, 0.55);
-  --lumi-sys-color--on-surface-de-emphasis: rgba(255, 255, 255, 0.55);
-  --lumi-sys-color--on-surface-low: rgba(255, 255, 255, 0.12);
-  --lumi-sys-color--positive: #0ebc5f;
-  --lumi-sys-color--positive-container: #002220;
-  --lumi-sys-color--on-positive-container: #0ebc5f;
-  --lumi-sys-color--error: #ff4c45;
-  --lumi-sys-color--error-container: #3c0202;
-  --lumi-sys-color--on-error-container: #ff4c45;
-  --lumi-sys-color--accent: #1f3b9b;
-  --lumi-sys-color--accent-container: #192967;
-  --lumi-sys-color--accent-fixed: #3186ff;
-  --lumi-sys-color--primary: #9dd2ff;
-  --lumi-sys-color--on-primary: #192967;
-  --lumi-sys-color--black: #000000;
-  --lumi-sys-color--white: #ffffff;
-  --lumi-sys-color--outline: #9a9b9c;
-  --lumi-sys-color--stroke-default: #2d2f38;
-
-  --lumi-sys-color--code-background: #141414;
-  --lumi-sys-color--code-primary-text: #ffffff;
-  --lumi-sys-color--code-blue-text: #4fa0ff;
-  --lumi-sys-color--code-green-text: #60d673;
-  --lumi-sys-color--code-grey-text: #808080;
-  --lumi-sys-color--code-pink-text: #ff96da;
-  --lumi-sys-color--code-purple-text: #969dff;
-  --lumi-sys-color--code-red-text: #ff5a59;
-  --lumi-sys-color--code-yellow-text: #ffdb0f;
-
-  --lumi-sys-color--chart-series-1: #9dd2ff;
-  --lumi-sys-color--chart-series-2: #96a7d6;
-  --lumi-sys-color--chart-series-3: #50e389;
-  --lumi-sys-color--chart-series-4: #c8f585;
-  --lumi-sys-color--chart-series-5: #f5f2e6;
-  --lumi-sys-color--chart-series-6: #dcd8c0;
-  --lumi-sys-color--chart-series-7: #82c7ff;
-  --lumi-sys-color--chart-series-8: #f5d77f;
-  --lumi-sys-color--chart-series-9: #d9ceff;
-  --lumi-sys-color--chart-series-10: #ffa6d7;
-}
-
-/* ============================================================
- * 3b. OS-LEVEL DARK FALLBACK  (prefers-color-scheme)
- *     A prior refactor introduced this stylesheet and moved the dark tokens onto
- *     :root[data-theme="dark"], but dropped the @media (prefers-color-scheme:
- *     dark) trigger that widgets previously carried in their own <style>.
- *     Inline widgets whose host sends no set-theme / data-theme message therefore
- *     stayed on the light --surface (#fdfcfc), rendering white in dark mode.
- *     Re-apply the dark values on OS dark; an explicit host data-theme="light"
- *     still opts back to light. Keep in sync with the :root[data-theme="dark"]
- *     block above.
- * ============================================================ */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --body-bg: #0f0f0f;
-    --lumi-sys-elevation--level1: 0 0 20px 0 rgba(0, 0, 0, 0.28);
-    --lumi-sys-elevation--level2: 0 0 20px 0 rgba(0, 0, 0, 0.40);
-
-    --lumi-sys-color--surface: #0f0f0f;
-    --lumi-sys-color--surface-dim: #141414;
-    --lumi-sys-color--surface-bright: #1c1c1c;
-    --lumi-sys-color--surface-background: #0f0f0f;
-    --lumi-sys-color--surface-accent: #14204f;
-    --lumi-sys-color--surface-container: #141414;
-    --lumi-sys-color--surface-container-high: #1c1c1c;
-    --lumi-sys-color--surface-translucent: rgba(24, 24, 27, 0.88);
-    --lumi-sys-color--on-surface: #e0e0e0;
-    --lumi-sys-color--on-surface-default: #e0e0e0;
-    --lumi-sys-color--on-surface-variant: rgba(255, 255, 255, 0.55);
-    --lumi-sys-color--on-surface-de-emphasis: rgba(255, 255, 255, 0.55);
-    --lumi-sys-color--on-surface-low: rgba(255, 255, 255, 0.12);
-    --lumi-sys-color--positive: #0ebc5f;
-    --lumi-sys-color--positive-container: #002220;
-    --lumi-sys-color--on-positive-container: #0ebc5f;
-    --lumi-sys-color--error: #ff4c45;
-    --lumi-sys-color--error-container: #3c0202;
-    --lumi-sys-color--on-error-container: #ff4c45;
-    --lumi-sys-color--accent: #1f3b9b;
-    --lumi-sys-color--accent-container: #192967;
-    --lumi-sys-color--accent-fixed: #3186ff;
-    --lumi-sys-color--primary: #9dd2ff;
-    --lumi-sys-color--on-primary: #192967;
-    --lumi-sys-color--black: #000000;
-    --lumi-sys-color--white: #ffffff;
-    --lumi-sys-color--outline: #9a9b9c;
-    --lumi-sys-color--stroke-default: #2d2f38;
-
-    --lumi-sys-color--code-background: #141414;
-    --lumi-sys-color--code-primary-text: #ffffff;
-    --lumi-sys-color--code-blue-text: #4fa0ff;
-    --lumi-sys-color--code-green-text: #60d673;
-    --lumi-sys-color--code-grey-text: #808080;
-    --lumi-sys-color--code-pink-text: #ff96da;
-    --lumi-sys-color--code-purple-text: #969dff;
-    --lumi-sys-color--code-red-text: #ff5a59;
-    --lumi-sys-color--code-yellow-text: #ffdb0f;
-
-    --lumi-sys-color--chart-series-1: #9dd2ff;
-    --lumi-sys-color--chart-series-2: #96a7d6;
-    --lumi-sys-color--chart-series-3: #50e389;
-    --lumi-sys-color--chart-series-4: #c8f585;
-    --lumi-sys-color--chart-series-5: #f5f2e6;
-    --lumi-sys-color--chart-series-6: #dcd8c0;
-    --lumi-sys-color--chart-series-7: #82c7ff;
-    --lumi-sys-color--chart-series-8: #f5d77f;
-    --lumi-sys-color--chart-series-9: #d9ceff;
-    --lumi-sys-color--chart-series-10: #ffa6d7;
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f3f5f8;
+    --card: #ffffff;
+    --text: #1d2939;
+    --muted: #667085;
+    --line: #d9e0e8;
+    --blue: #315bd6;
+    --blue-hover: #2448b4;
+    --tile: #e7edf5;
+    --tile-hover: #d5e1f2;
+    --light: #ffc857;
+    --light-border: #d99414;
+    --danger: #b42318;
+    --success: #18794e;
+    --shadow: 0 4px 18px rgba(24, 39, 75, 0.07);
   }
-}
 
-/* ============================================================
- * 4. SHORT DIAGRAM / CHART ALIASES
- *    Legacy diagram.md and chart.jinja2 reference short names such as
- *    --surface, --on-surface, --chart-1..10, --primary, --r-full. These MUST
- *    resolve to the canonical --lumi-sys-color--* tokens (which flip in dark
- *    mode) — otherwise every diagram var() falls back to black (historical
- *    mass-regression bug #4). Light-hex fallbacks are a last resort only.
- * ============================================================ */
-:root {
-  /* surfaces */
-  --surface: var(--lumi-sys-color--surface, #fdfcfc);
-  --surface-dim: var(--lumi-sys-color--surface-dim, #f2f0f0);
-  --surface-bright: var(--lumi-sys-color--surface-bright, #ffffff);
-  --surface-container: var(--lumi-sys-color--surface-container, #f2f0f0);
-  --surface-container-high: var(--lumi-sys-color--surface-container-high, #e6e6e6);
-  --surface-container-lowest: var(--lumi-sys-color--surface, #ffffff);
-  --surface-accent: var(--lumi-sys-color--surface-accent, #9dd2ff);
-  --surface-translucent: var(--lumi-sys-color--surface-translucent, rgba(255, 255, 255, 0.88));
-  --surface-glass: var(--lumi-sys-color--surface-translucent, rgba(255, 255, 255, 0.88));
-  /* foreground */
-  --on-surface: var(--lumi-sys-color--on-surface, #000000);
-  --on-surface-variant: var(--lumi-sys-color--on-surface-variant, rgba(0, 0, 0, 0.62));
-  --on-surface-low: var(--lumi-sys-color--on-surface-low, rgba(0, 0, 0, 0.08));
-  /* accents / brand */
-  --primary: var(--lumi-sys-color--primary, #3186ff);
-  --primary-container: var(--lumi-sys-color--accent-container, #dcf1ff);
-  --accent: var(--lumi-sys-color--accent, #9dd2ff);
-  --accent-container: var(--lumi-sys-color--accent-container, #dcf1ff);
-  --accent-fixed: var(--lumi-sys-color--accent-fixed, #3186ff);
-  /* status */
-  --positive: var(--lumi-sys-color--positive, #008052);
-  --positive-container: var(--lumi-sys-color--positive-container, #daf9d4);
-  --error: var(--lumi-sys-color--error, #de2d29);
-  --error-container: var(--lumi-sys-color--error-container, #ffdeec);
-  /* structure */
-  --outline: var(--lumi-sys-color--outline, #727676);
-  --stroke-default: var(--lumi-sys-color--stroke-default, #e3e3e3);
-  /* chart series 1..10 */
-  --chart-1: var(--lumi-sys-color--chart-series-1, #2575fc);
-  --chart-2: var(--lumi-sys-color--chart-series-2, #5b6e9e);
-  --chart-3: var(--lumi-sys-color--chart-series-3, #228a49);
-  --chart-4: var(--lumi-sys-color--chart-series-4, #62991b);
-  --chart-5: var(--lumi-sys-color--chart-series-5, #1e564d);
-  --chart-6: var(--lumi-sys-color--chart-series-6, #526a45);
-  --chart-7: var(--lumi-sys-color--chart-series-7, #2780c4);
-  --chart-8: var(--lumi-sys-color--chart-series-8, #997112);
-  --chart-9: var(--lumi-sys-color--chart-series-9, #705ec2);
-  --chart-10: var(--lumi-sys-color--chart-series-10, #c84288);
-  /* code palette */
-  --code-background: var(--lumi-sys-color--code-background, #000000);
-  --code-primary-text: var(--lumi-sys-color--code-primary-text, #ffffff);
-  /* spacing shorthands */
-  --spacing-xs: var(--lumi-sys-spacing--xs, 4px);
-  --spacing-s: var(--lumi-sys-spacing--s, 8px);
-  --spacing-m: var(--lumi-sys-spacing--m, 12px);
-  --spacing-l: var(--lumi-sys-spacing--l, 16px);
-  --spacing-xl: var(--lumi-sys-spacing--xl, 20px);
-  /* radius shorthands */
-  --r-s: var(--lumi-sys-shape--small, 8px);
-  --r-m: var(--lumi-sys-shape--medium, 12px);
-  --r-l: var(--lumi-sys-shape--large, 16px);
-  --r-xl: var(--lumi-sys-shape--xl, 28px);
-  --r-container: var(--lumi-sys-shape--xl-max, 40px);
-  --r-full: var(--lumi-sys-shape--full, 999px);
-}
+  * {
+    box-sizing: border-box;
+  }
 
-/* ============================================================
- * 5. IN-SCOPE PRE-BAKED COMPONENT CLASSES
- *    Interactive controls + simple display components only (Decision D5).
- *    Complex components (timeline, sequence, stepper, pros-cons, hero, HUD,
- *    hotspot, media grid) are intentionally excluded.
- * ============================================================ */
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+      sans-serif;
+    line-height: 1.5;
+  }
 
-/* Global font rendering quality + themed surface backdrop.
- * background/color MUST be set here (SSoT) so the widget backdrop follows the
- * light/dark surface token deterministically. Without this, a widget whose
- * model-generated markup forgets `background: var(--surface)` on its root
- * container falls back to the browser-default white body, producing a broken
- * dark mode (light header/chart area behind a dark card). Regression source:
- * batch1 PB-A02 dark. */
-html, body {
-  background: var(--body-bg, transparent) !important;
-  color: var(--on-surface) !important;
-  /* Auto-resizing iframe: content grows the frame, never scrolls the document.
-   * Model widgets already emit this; declared here as the SSoT default. */
-  overflow-y: hidden;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  font-optical-sizing: auto;
-  text-rendering: optimizeLegibility;
-}
-
-.widget-container {
-  width: 100% !important;
-  max-width: 100% !important;
-  padding-inline: 0 !important;
-  box-sizing: border-box;
-}
-
-/* ============================================================
- * SCROLLBAR DISCIPLINE (single source of truth)
- *   Long lists/cards flow and let the iframe auto-resize (see the C++
- *   NeutralizeInnerScroll pass, which removes accidental tiny scroll boxes).
- *   For LEGITIMATE overflow that remains (wide tables, code, pan-containers,
- *   large >=240px viewports) render a slim, theme-aware scrollbar.
- *   One token carries the correct light/dark contrast (the auto-flipped
- *   stroke token is too dark on #0f0f0f), referenced once = SSoT.
- * ============================================================ */
-:root { --lumi-scrollbar-thumb: rgba(0, 0, 0, 0.20); }
-:root[data-theme="dark"], body.dark-mode { --lumi-scrollbar-thumb: rgba(255, 255, 255, 0.20); }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --lumi-scrollbar-thumb: rgba(255, 255, 255, 0.20); }
-}
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--lumi-scrollbar-thumb) transparent;
-}
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background-color: var(--lumi-scrollbar-thumb);
-  border-radius: var(--lumi-sys-shape--full, 999px);
-}
-
-/* --- Buttons --- */
-/* Universal button fallback (element specificity 0,0,1) — beats `* { padding: 0 }`
-   author resets (0,0,0) while still yielding to any author class selector (0,1,0). */
-button {
-  appearance: none;
-  -webkit-appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--lumi-sys-spacing--xs, 6px);
-  min-height: 36px;
-  padding: 6px 16px;
-  font-family: var(--ff-sans, 'Google Sans Flex', 'Google Sans', sans-serif);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 18px;
-  color: var(--on-surface, #000000);
-  background-color: var(--surface-bright, #ffffff);
-  border: 1px solid var(--stroke-default, #e3e3e3);
-  border-radius: var(--lumi-sys-shape--full, 999px);
-  cursor: pointer;
-  user-select: none;
-  box-sizing: border-box;
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
-}
-button:hover {
-  background-color: var(--surface-container-high, #e6e6e6);
-}
-button.active, button.is-active, button.selected, button.is-selected, button[aria-pressed="true"], button[aria-selected="true"] {
-  background-color: var(--accent-container, #dcf1ff);
-  color: var(--lumi-sys-color--on-surface-default, #000000);
-  border-color: var(--lumi-sys-color--primary, #3186ff);
-}
-
-.lumi-btn, [class^="lumi-btn-"], [class*=" lumi-btn-"] { display: inline-flex; align-items: center; justify-content: center; gap: var(--lumi-sys-spacing--s, 8px); min-height: 40px; padding: 0px 20px; font-family: var(--ff-sans, 'Google Sans Flex', 'Google Sans', sans-serif); font-size: 14px; font-weight: 500; line-height: 20px; border-radius: var(--lumi-sys-shape--full, 999px); border: 1px solid var(--lumi-sys-color--stroke-default, #e3e3e3); cursor: pointer; user-select: none; transition: background-color 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s; text-decoration: none; box-sizing: border-box; white-space: nowrap; }
-.lumi-btn:active, .lumi-btn.is-pressed, [class^="lumi-btn-"]:active, [class*=" lumi-btn-"]:active { transform: scale(0.98); }
-.lumi-btn--tonal, .lumi-btn-tonal, .lumi-btn--secondary, .lumi-btn-secondary, [class^="lumi-btn-"], [class*=" lumi-btn-"] { background-color: var(--lumi-sys-color--surface-bright, #ffffff); color: var(--lumi-sys-color--on-surface-default, #000000); }
-.lumi-btn--tonal:hover, .lumi-btn-tonal:hover, .lumi-btn--secondary:hover, .lumi-btn-secondary:hover, [class^="lumi-btn-"]:hover, [class*=" lumi-btn-"]:hover { background-color: var(--lumi-sys-color--surface-container-high, #e6e6e6); }
-.lumi-btn--accent, .lumi-btn-accent, .lumi-btn--primary, .lumi-btn-primary { background-color: var(--lumi-sys-color--accent, #9dd2ff); color: var(--lumi-sys-color--on-surface-default, #000000); border-color: transparent; }
-.lumi-btn--accent:hover, .lumi-btn-accent:hover, .lumi-btn--primary:hover, .lumi-btn-primary:hover { background-color: var(--lumi-sys-color--accent-container, #dcf1ff); }
-.lumi-btn--bright, .lumi-btn-bright { background-color: var(--lumi-sys-color--surface-bright, #ffffff); color: var(--lumi-sys-color--on-surface-default, #000000); border-color: var(--lumi-sys-color--stroke-default, #e3e3e3); box-shadow: none; }
-.lumi-btn--bright:hover, .lumi-btn-bright:hover { background-color: var(--lumi-sys-color--surface-container-high, #e6e6e6); }
-.lumi-btn--ghost, .lumi-btn-ghost, .lumi-btn--on-surface { background-color: var(--lumi-sys-color--on-surface-low, rgba(0, 0, 0, 0.04)); color: var(--lumi-sys-color--on-surface-default, #000000); border-color: transparent; }
-.lumi-btn--ghost:hover, .lumi-btn-ghost:hover, .lumi-btn--on-surface:hover { background-color: var(--lumi-sys-color--on-surface-low, rgba(0, 0, 0, 0.08)); }
-.lumi-btn--translucent { background-color: rgba(255, 255, 255, 0.25); backdrop-filter: blur(12px); color: var(--lumi-sys-color--on-surface-default, #000000); border-color: rgba(255, 255, 255, 0.3); }
-.lumi-btn--translucent:hover { background-color: rgba(255, 255, 255, 0.35); }
-.lumi-btn--small, .lumi-btn-small { min-height: 36px; padding: 0px 16px; font-size: 13px; line-height: 18px; gap: var(--lumi-sys-spacing--xs, 4px); }
-.lumi-btn--xsmall, .lumi-btn-xsmall { min-height: 24px; padding: 0px 10px; font-size: 11px; line-height: 16px; gap: 4px; }
-.lumi-btn:disabled, .lumi-btn.is-disabled, [class^="lumi-btn-"]:disabled, [class*=" lumi-btn-"]:disabled { opacity: var(--lumi-sys-opacity-state--disabled, 0.38); cursor: not-allowed; pointer-events: none; }
-.lumi-btn.is-selected, .lumi-btn.selected, .lumi-btn.is-active, .lumi-btn.active, .lumi-btn[aria-pressed="true"], .lumi-btn[aria-selected="true"] { background-color: var(--lumi-sys-color--accent-container, #dcf1ff); color: var(--lumi-sys-color--on-surface-default, #000000); border-color: var(--lumi-sys-color--primary, #3186ff); }
-.lumi-btn.is-selected:hover, .lumi-btn.selected:hover, .lumi-btn.is-active:hover, .lumi-btn.active:hover, .lumi-btn[aria-pressed="true"]:hover, .lumi-btn[aria-selected="true"]:hover { background-color: var(--lumi-sys-color--accent, #9dd2ff); }
-
-/* --- Switch --- */
-.lumi-switch { display: inline-flex; align-items: center; gap: var(--lumi-sys-spacing--s, 8px); cursor: pointer; font-family: var(--ff-sans, 'Google Sans Flex', 'Google Sans', sans-serif); font-size: 15px; color: var(--lumi-sys-color--on-surface-default, #000000); user-select: none; }
-.lumi-switch input[type="checkbox"] { position: absolute; opacity: 0; width: 0px; height: 0px; pointer-events: none; }
-.lumi-switch__track { position: relative; display: inline-flex; align-items: center; width: 52px; height: 32px; background-color: var(--lumi-sys-color--surface-dim, #f2f0f0); border: 2px solid var(--lumi-sys-color--stroke-default, rgba(0, 0, 0, 0.12)); border-radius: var(--lumi-sys-shape--full, 999px); transition: background-color 0.2s, border-color 0.2s; flex-shrink: 0; box-sizing: border-box; }
-.lumi-switch__thumb, .lumi-switch__track::after { content: ""; position: absolute; top: 50%; left: 6px; transform: translateY(-50%); width: 16px; height: 16px; border-radius: 50%; background-color: var(--lumi-sys-color--on-surface-variant, #757575); transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1); display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
-.lumi-switch input[type="checkbox"]:checked + .lumi-switch__track { background-color: var(--lumi-sys-color--accent-fixed, #3186ff); border-color: transparent; }
-.lumi-switch input[type="checkbox"]:checked + .lumi-switch__track .lumi-switch__thumb, .lumi-switch input[type="checkbox"]:checked + .lumi-switch__track::after { left: 22px; width: 24px; height: 24px; background-color: rgb(255, 255, 255); }
-.lumi-switch input[type="checkbox"]:disabled + .lumi-switch__track { opacity: var(--lumi-sys-opacity-state--disabled, 0.38); cursor: not-allowed; }
-.lumi-switch--small .lumi-switch__track, .lumi-switch--mini .lumi-switch__track { width: 32px; height: 20px; }
-.lumi-switch--small .lumi-switch__thumb, .lumi-switch--small .lumi-switch__track::after, .lumi-switch--mini .lumi-switch__thumb, .lumi-switch--mini .lumi-switch__track::after { width: 12px; height: 12px; left: 2px; }
-.lumi-switch--small input[type="checkbox"]:checked + .lumi-switch__track .lumi-switch__thumb, .lumi-switch--small input[type="checkbox"]:checked + .lumi-switch__track::after, .lumi-switch--mini input[type="checkbox"]:checked + .lumi-switch__track .lumi-switch__thumb, .lumi-switch--mini input[type="checkbox"]:checked + .lumi-switch__track::after { left: 12px; width: 16px; height: 16px; }
-
-/* --- Checkbox --- */
-.lumi-checkbox-label { display: inline-flex; align-items: center; gap: var(--lumi-sys-spacing--s, 8px); cursor: pointer; font-family: var(--ff-sans, 'Google Sans Flex', 'Google Sans', sans-serif); font-size: 15px; color: var(--lumi-sys-color--on-surface-default, #000000); user-select: none; }
-.lumi-checkbox-label input[type="checkbox"] { position: absolute; opacity: 0; width: 0px; height: 0px; pointer-events: none; }
-.lumi-checkbox { position: relative; width: 24px; height: 24px; border-radius: var(--lumi-sys-shape--small, 8px); border: 2px solid var(--lumi-sys-color--on-surface-variant, rgba(0, 0, 0, 0.62)); background-color: transparent; transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-sizing: border-box; }
-.lumi-checkbox-label:hover .lumi-checkbox { background-color: var(--lumi-sys-color--on-surface-low, rgba(0, 0, 0, 0.04)); border-color: var(--lumi-sys-color--on-surface-default, #000000); }
-.lumi-checkbox-label input[type="checkbox"]:checked ~ .lumi-checkbox, .lumi-checkbox-label input[type="checkbox"]:indeterminate ~ .lumi-checkbox, .lumi-checkbox.is-indeterminate { background-color: var(--lumi-sys-color--on-surface-default, #000000); border-color: transparent; }
-.lumi-checkbox .lumi-checkmark { font-size: 18px; line-height: 1; color: var(--lumi-sys-color--surface, #ffffff); fill: var(--lumi-sys-color--surface, #ffffff); display: none; user-select: none; }
-.lumi-checkbox-label input[type="checkbox"]:checked ~ .lumi-checkbox .lumi-checkmark, .lumi-checkbox-label input[type="checkbox"]:checked ~ .lumi-checkbox .lumi-checkbox__check { display: block; }
-.lumi-checkbox-label input[type="checkbox"]:indeterminate ~ .lumi-checkbox .lumi-checkbox__indeterminate, .lumi-checkbox.is-indeterminate .lumi-checkbox__indeterminate { display: block; }
-.lumi-checkbox-label input[type="checkbox"]:disabled ~ .lumi-checkbox, .lumi-checkbox-label input[type="checkbox"]:disabled ~ span { opacity: var(--lumi-sys-opacity-state--disabled, 0.38); cursor: not-allowed; }
-
-/* --- Slider --- */
-.lumi-slider-container { display: flex; align-items: center; gap: var(--lumi-sys-spacing--m, 16px); width: 100%; }
-.lumi-slider-row { display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--xs, 4px); width: 100%; }
-.lumi-slider-label { font-family: var(--ff-sans, 'Google Sans Flex', 'Google Sans', sans-serif); font-size: 15px; font-weight: 400; color: var(--lumi-sys-color--on-surface-default, #000000); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lumi-slider { appearance: none; width: calc(100% + 28px); margin-left: -14px; margin-right: -14px; height: 40px; background: transparent; cursor: pointer; box-sizing: border-box; }
-.lumi-slider:focus { outline: none; }
-.lumi-slider::-webkit-slider-runnable-track { height: 4px; --thumb-center: calc(14px + (100% - 28px) * (var(--progress, 50%) / 100%)); --active-end: calc(var(--thumb-center) - 8px + (var(--progress, 50%) / 100%) * 6px); background-image: radial-gradient(circle at calc(100% - 18px) center, var(--lumi-sys-color--on-surface-variant, #757575) 2px, transparent 2.5px), linear-gradient( to right, transparent 0, transparent 14px, var(--lumi-sys-color--on-surface-default, #000000) 14px, var(--lumi-sys-color--on-surface-default, #000000) var(--active-end), transparent var(--active-end), transparent calc(var(--thumb-center) + 8px), var(--lumi-sys-color--stroke-default, rgba(0, 0, 0, 0.12)) calc(var(--thumb-center) + 8px), var(--lumi-sys-color--stroke-default, rgba(0, 0, 0, 0.12)) calc(100% - 16px), transparent calc(100% - 16px), transparent 100% ); border-radius: var(--lumi-sys-shape--full, 999px); border-width: medium; border-style: none; border-color: currentcolor; border-image: none; }
-.lumi-slider::-webkit-slider-thumb { appearance: none; width: 32px; height: 32px; border-radius: 50%; background-color: transparent; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Crect x='14' y='6' width='4' height='20' rx='2' fill='%23000000'/%3E%3C/svg%3E"); background-size: 32px 32px; background-repeat: no-repeat; background-position: center center; border-width: medium; border-style: none; border-color: currentcolor; border-image: none; box-sizing: border-box; margin-top: -14px; cursor: pointer; transition: background-color 0.15s; }
-.lumi-slider:hover::-webkit-slider-thumb { background-color: var(--lumi-sys-color--on-surface-low, rgba(0, 0, 0, 0.08)); }
-.lumi-slider:active::-webkit-slider-thumb { background-color: var(--lumi-sys-color--on-surface-low, rgba(0, 0, 0, 0.12)); }
-.lumi-slider:disabled { opacity: var(--lumi-sys-opacity-state--disabled, 0.38); cursor: not-allowed; }
-.lumi-slider:disabled::-webkit-slider-thumb { cursor: not-allowed; box-shadow: none; }
-.lumi-slider-value { display: flex; align-items: center; justify-content: center; min-width: 64px; height: 40px; padding: 0px 12px; background-color: var(--lumi-sys-color--surface-dim, #f2f0f0); border-radius: var(--lumi-sys-shape--medium, 16px); font-family: var(--ff-mono, 'Google Sans Code', 'Google Sans Mono', monospace); font-size: 15px; font-weight: 400; color: var(--lumi-sys-color--on-surface-default, #000000); flex-shrink: 0; box-sizing: border-box; }
-
-/* --- Text input --- */
-.lumi-input-group { display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--xs, 4px); width: 100%; }
-.lumi-input-label { font-family: var(--ff-sans, 'Google Sans Flex', 'Google Sans', sans-serif); font-size: 14px; font-weight: 500; line-height: 20px; color: var(--lumi-sys-color--on-surface-default, #000000); }
-.lumi-input { appearance: none; width: 100%; min-height: 48px; padding: 0px 16px; font-family: var(--ff-sans, 'Google Sans Flex', 'Google Sans', sans-serif); font-size: 15px; font-weight: 400; line-height: 22px; color: var(--lumi-sys-color--on-surface-default, #000000); background-color: var(--lumi-sys-color--surface-bright, #ffffff); border: 1px solid var(--lumi-sys-color--stroke-default, rgba(0, 0, 0, 0.12)); border-radius: var(--lumi-sys-shape--large, 16px); background-clip: padding-box; outline: none; box-sizing: border-box; transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s; }
-.lumi-input::placeholder { color: var(--lumi-sys-color--on-surface-variant, rgba(0, 0, 0, 0.62)); }
-.lumi-input:hover { border-color: var(--lumi-sys-color--on-surface-default, #000000); }
-.lumi-input:focus, .lumi-input:focus-visible { border-color: var(--lumi-sys-color--accent-fixed, #3186ff); box-shadow: 0 0 0 2px var(--lumi-sys-color--accent-container, rgba(49, 134, 255, 0.25)); }
-textarea.lumi-input, .lumi-input--area { min-height: 100px; padding: 12px 16px; resize: vertical; line-height: 22px; }
-.lumi-input.is-error, .lumi-input-group.is-error .lumi-input { border-color: var(--lumi-sys-color--error, #ff4c45); }
-.lumi-input-helper { font-family: var(--ff-sans, 'Google Sans Flex', 'Google Sans', sans-serif); font-size: 12px; line-height: 16px; color: var(--lumi-sys-color--on-surface-variant, rgba(0, 0, 0, 0.62)); }
-.lumi-input-group.is-error .lumi-input-helper, .lumi-input-helper--error { color: var(--lumi-sys-color--error, #ff4c45); }
-.lumi-input:disabled, .lumi-input.is-disabled { opacity: var(--lumi-sys-opacity-state--disabled, 0.38); background-color: var(--lumi-sys-color--surface-dim, #f2f0f0); cursor: not-allowed; }
-
-/* --- Focus ring --- */
-:focus-visible { outline: 2px solid var(--lumi-sys-color--on-surface-default, #000000) !important; outline-offset: 2px !important; box-shadow: none !important; }
-.lumi-btn:focus-visible, .lumi-switch input[type="checkbox"]:focus-visible + .lumi-switch__track, .lumi-checkbox-label input[type="checkbox"]:focus-visible ~ .lumi-checkbox, .lumi-slider:focus-visible::-webkit-slider-thumb, .lumi-input:focus-visible { outline: 2px solid var(--lumi-sys-color--on-surface-default, #000000); outline-offset: 2px; box-shadow: none; }
-
-/* --- Typography: Display / Headline / Body / Label --- */
-.lumi-display-l { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 42px; line-height: 48px; font-weight: 280; font-variation-settings: "wght" 280, "wdth" 100, "opsz" 42, "ROND" 100; }
-.lumi-display-l-emphasized { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 42px; line-height: 48px; font-weight: 450; font-variation-settings: "wght" 450, "wdth" 100, "opsz" 42, "ROND" 100; }
-.lumi-display-m { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 36px; line-height: 44px; font-weight: 320; font-variation-settings: "wght" 320, "wdth" 100, "opsz" 36, "ROND" 100; }
-.lumi-display-m-emphasized { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 36px; line-height: 44px; font-weight: 480; font-variation-settings: "wght" 480, "wdth" 100, "opsz" 36, "ROND" 100; }
-.lumi-display-s { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 32px; line-height: 38px; font-weight: 360; font-variation-settings: "wght" 360, "wdth" 100, "opsz" 32, "ROND" 100; }
-.lumi-display-s-emphasized { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 32px; line-height: 38px; font-weight: 500; font-variation-settings: "wght" 500, "wdth" 100, "opsz" 32, "ROND" 100; }
-.lumi-headline-l { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 28px; line-height: 36px; font-weight: 350; font-variation-settings: "wght" 350, "wdth" 100, "opsz" 28, "ROND" 20; }
-.lumi-headline-l-emphasized { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 28px; line-height: 36px; font-weight: 520; font-variation-settings: "wght" 520, "wdth" 100, "opsz" 28, "ROND" 20; }
-.lumi-headline-m { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 24px; line-height: 28px; font-weight: 380; font-variation-settings: "wght" 380, "wdth" 100, "opsz" 24, "ROND" 20; }
-.lumi-headline-m-emphasized { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 24px; line-height: 28px; font-weight: 540; font-variation-settings: "wght" 540, "wdth" 100, "opsz" 24, "ROND" 20; }
-.lumi-headline-s { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 20px; line-height: 24px; font-weight: 470; font-variation-settings: "wght" 470, "wdth" 94, "opsz" 20, "ROND" 20; }
-.lumi-headline-s-emphasized { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 20px; line-height: 24px; font-weight: 580; font-variation-settings: "wght" 580, "wdth" 94, "opsz" 20, "ROND" 20; }
-.lumi-body-l { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 17px; line-height: 24px; font-weight: 400; font-variation-settings: "wght" 400, "wdth" 92, "opsz" 17; }
-.lumi-body-l-emphasized { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 17px; line-height: 24px; font-weight: 540; font-variation-settings: "wght" 540, "wdth" 92, "opsz" 17; font-variant-numeric: tabular-nums; }
-.lumi-body-m { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 15px; line-height: 20px; font-weight: 400; font-variation-settings: "wght" 400, "wdth" 92, "opsz" 15; }
-.lumi-body-m-emphasized { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 15px; line-height: 20px; font-weight: 540; font-variation-settings: "wght" 540, "wdth" 92, "opsz" 15; font-variant-numeric: tabular-nums; }
-.lumi-body-s { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 13px; line-height: 17px; font-weight: 400; font-variation-settings: "wght" 400, "wdth" 92, "opsz" 13; }
-.lumi-body-s-emphasized { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 13px; line-height: 17px; font-weight: 540; font-variation-settings: "wght" 540, "wdth" 92, "opsz" 13; font-variant-numeric: tabular-nums; }
-.lumi-label-l { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 17px; line-height: 24px; font-weight: 370; font-variation-settings: "wght" 370, "wdth" 92, "opsz" 17; }
-.lumi-label-l-emphasized { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 17px; line-height: 24px; font-weight: 510; font-variation-settings: "wght" 510, "wdth" 92, "opsz" 17; }
-.lumi-label-m { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 15px; line-height: 20px; font-weight: 370; font-variation-settings: "wght" 370, "wdth" 92, "opsz" 15; }
-.lumi-label-m-emphasized { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 15px; line-height: 20px; font-weight: 510; font-variation-settings: "wght" 510, "wdth" 92, "opsz" 15; }
-.lumi-label-s { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 13px; line-height: 20px; font-weight: 370; font-variation-settings: "wght" 370, "wdth" 92, "opsz" 13; }
-.lumi-label-s-emphasized { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 13px; line-height: 20px; font-weight: 510; font-variation-settings: "wght" 510, "wdth" 92, "opsz" 13; }
-
-/* --- Typography: Monospace / Extended (Google Sans Code) --- */
-.lumi-blockquote { font-family: var(--ff-mono, 'Google Sans Code', monospace); font-style: italic; font-size: 22px; line-height: 30px; font-weight: 300; font-variation-settings: "wght" 300, "opsz" 22, "MONO" 0; }
-.lumi-takeaway { font-family: var(--ff-mono, 'Google Sans Code', monospace); font-style: italic; font-size: 17px; line-height: 24px; font-weight: 400; font-variation-settings: "wght" 400, "opsz" 17, "MONO" 0; }
-.lumi-caption { font-family: var(--ff-mono, 'Google Sans Code', monospace); font-style: italic; font-size: 13px; line-height: 20px; font-weight: 400; font-variation-settings: "wght" 400, "opsz" 13, "MONO" 0; }
-.lumi-code { font-family: var(--ff-mono, 'Google Sans Code', monospace); font-size: 15px; line-height: 20px; font-weight: 400; font-variation-settings: "wght" 400, "MONO" 1; }
-.lumi-bullet { font-family: var(--ff-mono, 'Google Sans Code', monospace); font-size: 15px; line-height: 24px; font-weight: 650; font-variation-settings: "wght" 650, "MONO" 1; }
-
-/* --- Cards & attribution --- */
-.lumi-summary-card { padding: var(--lumi-sys-spacing--l, 16px); background-color: var(--lumi-sys-color--surface-container, #f2f0f0); border-radius: var(--lumi-sys-shape--medium, 12px); color: var(--lumi-sys-color--on-surface-default, #000000); font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 15px; line-height: 20px; box-sizing: border-box; }
-.lumi-link-card { display: flex; align-items: center; justify-content: space-between; padding: var(--lumi-sys-spacing--l, 16px); background-color: var(--lumi-sys-color--surface-container, #f2f0f0); border-radius: var(--lumi-sys-shape--medium, 12px); text-decoration: none; color: var(--lumi-sys-color--on-surface-default, #000000); transition: background-color 0.15s; box-sizing: border-box; }
-.lumi-link-card:hover { background-color: var(--lumi-sys-color--surface-container-high, #e6e6e6); }
-.lumi-attribution-buffer { margin-top: var(--lumi-sys-spacing--xxl, 24px); font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 13px; color: var(--lumi-sys-color--on-surface-de-emphasis, rgba(0, 0, 0, 0.62)); }
-.lumi-card { background-color: var(--lumi-sys-color--surface-dim, #f2f0f0); border-radius: var(--lumi-sys-shape--large-max, 24px); padding: var(--lumi-sys-spacing--3xl, 28px); display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--s, 8px); width: 100%; box-sizing: border-box; }
-.lumi-card-title { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 20px; font-weight: 500; font-variation-settings: "wght" 470, "wdth" 94, "opsz" 20; color: var(--lumi-sys-color--on-surface, #000000); margin: 0px; }
-.lumi-card-subtitle { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 13px; font-weight: 400; font-variation-settings: "wght" 400, "wdth" 92, "opsz" 13; color: var(--lumi-sys-color--on-surface-variant, rgba(0, 0, 0, 0.62)); margin: 0; }
-.lumi-card-body { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 15px; font-weight: 400; font-variation-settings: "wght" 400, "wdth" 92, "opsz" 15; color: var(--lumi-sys-color--on-surface, #000000); margin: var(--lumi-sys-spacing--xs, 4px) 0 0 0; }
-.lumi-overlay-card { background-color: var(--surface-translucent, rgba(255, 255, 255, 0.88)); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--stroke-default); border-radius: var(--lumi-sys-shape--medium, 12px); padding: var(--lumi-sys-spacing--m, 12px) var(--lumi-sys-spacing--l, 16px); color: var(--on-surface); box-shadow: var(--lumi-sys-elevation--level1); box-sizing: border-box; }
-
-/* --- Progress bar --- */
-.lumi-progress-tracker { display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--xs, 4px); width: 100%; }
-.lumi-progress-bar { width: 100%; height: 8px; background-color: var(--lumi-sys-color--stroke-default, #e3e3e3); border: 1px solid transparent; box-sizing: border-box; border-radius: var(--lumi-sys-shape--full, 999px); overflow: hidden; }
-.lumi-progress-fill { height: 100%; background-color: var(--lumi-sys-color--accent-fixed, #3186ff); border-radius: var(--lumi-sys-shape--full, 999px); transition: width 0.3s; }
-
-/* --- Accordion (card group variant) --- */
-.lumi-accordion-group { display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--s, 8px); }
-.lumi-accordion-group .lumi-accordion-item { background-color: var(--lumi-sys-color--surface-container, #f2f0f0); border-radius: var(--lumi-sys-shape--medium, 12px); overflow: hidden; transition: background-color 0.15s; }
-.lumi-accordion-group .lumi-accordion-header { padding: var(--lumi-sys-spacing--l, 16px); font-family: var(--ff-sans, sans-serif); font-size: 15px; font-weight: 540; cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center; color: var(--lumi-sys-color--on-surface-default, #000000); }
-.lumi-accordion-group .lumi-accordion-chevron { transition: transform 0.2s; font-size: 12px; }
-.lumi-accordion-group .lumi-accordion-item.active .lumi-accordion-chevron { transform: rotate(180deg); }
-.lumi-accordion-group .lumi-accordion-body { display: none; padding: 0 var(--lumi-sys-spacing--l, 16px) var(--lumi-sys-spacing--l, 16px) var(--lumi-sys-spacing--l, 16px); font-family: var(--ff-sans, sans-serif); font-size: 15px; color: var(--lumi-sys-color--on-surface-de-emphasis, rgba(0, 0, 0, 0.62)); line-height: 20px; }
-.lumi-accordion-group .lumi-accordion-item.active .lumi-accordion-body { display: block; }
-
-/* --- Accordion (borderless list variant) --- */
-.lumi-accordion { display: flex; flex-direction: column; width: 100%; border-top: 1px solid var(--lumi-sys-color--on-surface-low, rgba(0, 0, 0, 0.08)); }
-.lumi-accordion-item { display: flex; flex-direction: column; width: 100%; background: transparent; border-radius: 0px; border-bottom: 1px solid var(--lumi-sys-color--on-surface-low, rgba(0, 0, 0, 0.08)); }
-.lumi-accordion-header { display: flex; justify-content: space-between; align-items: center; padding: var(--lumi-sys-spacing--xl, 20px) 0; cursor: pointer; user-select: none; }
-.lumi-accordion-title { margin: 0px; color: var(--lumi-sys-color--on-surface-default, #000000); }
-.lumi-accordion-item.active .lumi-accordion-content { display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--l, 16px); }
-.lumi-accordion-content { display: none; padding-bottom: var(--lumi-sys-spacing--xxl, 24px); }
-.lumi-accordion-field { display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--xxs, 2px); }
-.lumi-accordion-field-label { margin: 0px; color: var(--lumi-sys-color--on-surface-default, #000000); }
-.lumi-accordion-field-val { margin: 0px; color: var(--lumi-sys-color--on-surface-default, #000000); }
-
-/* --- Segmented control --- */
-.lumi-segmented-group { display: flex; background-color: var(--lumi-sys-color--surface-container, #f2f0f0); padding: 4px; border-radius: var(--lumi-sys-shape--full, 999px); gap: 4px; }
-.lumi-segmented-btn { flex: 1 1 0%; padding: 8px 16px; border: 1px solid transparent; border-radius: var(--lumi-sys-shape--full, 999px); background-color: transparent; font-family: var(--ff-sans, sans-serif); font-size: 14px; font-weight: 510; cursor: pointer; color: var(--lumi-sys-color--on-surface-de-emphasis, rgba(0, 0, 0, 0.62)); transition: 0.2s; }
-.lumi-segmented-btn.is-active, .lumi-segmented-btn.active, .lumi-segmented-btn.is-selected, .lumi-segmented-btn.selected, .lumi-segmented-btn[aria-pressed="true"], .lumi-segmented-btn[aria-selected="true"] { background-color: var(--lumi-sys-color--surface-bright, #ffffff); color: var(--lumi-sys-color--on-surface-default, #000000); box-shadow: var(--lumi-sys-elevation--level1); }
-
-/* --- Tabs --- */
-.lumi-tab-group { display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--4xl, 36px); width: 100%; }
-.lumi-tab-bar { display: flex; gap: var(--lumi-sys-spacing--l, 16px); padding-bottom: 0px; overflow-x: auto; scrollbar-width: none; }
-.lumi-tab-bar::-webkit-scrollbar { display: none; }
-.lumi-tab { height: 40px; padding: 0 var(--lumi-sys-spacing--xl, 20px); display: flex; align-items: center; justify-content: center; font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 17px; line-height: 24px; font-weight: 370; font-variation-settings: "wght" 370, "wdth" 92, "opsz" 17; color: var(--lumi-sys-color--on-surface-de-emphasis, rgba(0, 0, 0, 0.62)); background: transparent; border: 1px solid transparent; border-radius: var(--lumi-sys-shape--full, 999px); cursor: pointer; white-space: nowrap; transition: background-color 0.15s, color 0.15s; }
-.lumi-tab:hover { color: var(--lumi-sys-color--on-surface-default, #000000); }
-.lumi-tab.active, .lumi-tab.is-active, .lumi-tab.is-selected, .lumi-tab.selected, .lumi-tab[aria-pressed="true"], .lumi-tab[aria-selected="true"] { background-color: var(--lumi-sys-color--surface-container-high, #f2f0f0); color: var(--lumi-sys-color--on-surface-default, #000000); font-weight: 510; font-variation-settings: "wght" 510, "wdth" 92, "opsz" 17; }
-.lumi-tab-content { display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--m, 12px); padding-top: 0px; padding-bottom: 0px; }
-.lumi-tab-content .lumi-body-l-emphasized, .lumi-tab-content .lumi-headline-s { margin: 0px; }
-.lumi-tab-content .lumi-body-l { margin: 0px; color: var(--lumi-sys-color--on-surface-default, #000000); }
-
-/* --- Callout / pullquote --- */
-.lumi-callout { display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--xs, 4px); width: 100%; }
-.lumi-callout .lumi-body-l-emphasized { margin: 0px; }
-.lumi-pullquote { display: flex; gap: var(--lumi-sys-spacing--xl, 20px); width: 100%; margin: 0px; }
-.lumi-pullquote-mark { width: 30px; height: 22px; flex-shrink: 0; margin-top: 4px; color: var(--lumi-sys-color--on-surface-default, #000000); }
-.lumi-pullquote-body { display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--l, 16px); flex: 1 1 0%; min-width: 0px; }
-p.lumi-pullquote-text, .lumi-pullquote-text { font-family: var(--ff-mono, 'Google Sans Code', monospace); font-style: italic; font-weight: 300; font-variation-settings: "wght" 300, "opsz" 22, "MONO" 0; color: var(--lumi-sys-color--on-surface-default, #000000); margin: 0px; font-size: 22px !important; line-height: 30px !important; }
-.lumi-pullquote-cite { display: flex; flex-direction: column; font-style: normal; }
-.lumi-pullquote-cite .lumi-de-emphasis { color: var(--lumi-sys-color--on-surface-de-emphasis, rgba(0, 0, 0, 0.62)); }
-
-/* --- Data table (simple) --- */
-.lumi-data-table-container { width: 100%; overflow-x: auto; border-radius: var(--lumi-sys-shape--medium, 12px); border: 1px solid var(--lumi-sys-color--stroke-default, rgba(0, 0, 0, 0.12)); }
-.lumi-data-table { width: 100%; border-collapse: collapse; font-family: var(--ff-sans, sans-serif); font-size: 14px; text-align: left; }
-.lumi-data-table th { padding: 12px 16px; font-weight: 600; background-color: var(--lumi-sys-color--surface-container, #f2f0f0); border-bottom: 1px solid var(--lumi-sys-color--stroke-default, rgba(0, 0, 0, 0.12)); color: var(--lumi-sys-color--on-surface-default, #000000); }
-.lumi-data-table td { padding: 12px 16px; border-bottom: 1px solid var(--lumi-sys-color--stroke-default, rgba(0, 0, 0, 0.12)); color: var(--lumi-sys-color--on-surface-default, #000000); }
-.lumi-data-table tr:last-child td { border-bottom-width: medium; border-bottom-style: none; border-bottom-color: currentcolor; }
-
-/* --- Table widget (prose-style) --- */
-.lumi-table-widget { display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--xxl, 24px); width: 100%; }
-.lumi-table-title { margin: 0px; color: var(--lumi-sys-color--on-surface-default, #000000); }
-.lumi-table { width: 100%; border-collapse: collapse; font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); text-align: left; }
-.lumi-table th { padding: 12px 16px 12px 0px; font-size: 17px; line-height: 24px; font-weight: 540; font-variation-settings: "wght" 540, "wdth" 92, "opsz" 17; color: var(--lumi-sys-color--on-surface-default, #000000); border-bottom: 1px solid var(--lumi-sys-color--on-surface-low, rgba(0, 0, 0, 0.08)); }
-.lumi-table td { padding: 16px 16px 16px 0px; font-size: 17px; line-height: 24px; font-weight: 400; font-variation-settings: "wght" 400, "wdth" 92, "opsz" 17; color: var(--lumi-sys-color--on-surface-default, #000000); border-bottom: 1px solid var(--lumi-sys-color--on-surface-low, rgba(0, 0, 0, 0.08)); }
-.lumi-table td:last-child, .lumi-table th:last-child { padding-right: 0px; }
-.lumi-table tr.lumi-table-ellipsis-row td { padding: 16px 0 0; border-bottom-width: medium; border-bottom-style: none; border-bottom-color: currentcolor; color: var(--lumi-sys-color--on-surface-variant, rgba(0, 0, 0, 0.62)); }
-
-/* --- Sortable Table Headers --- */
-th[aria-sort] { color: var(--lumi-sys-color--on-surface-default, #000000); }
-button.lumi-sort-btn, .lumi-sort-btn { all: unset; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; text-align: inherit; width: 100%; justify-content: inherit; border-radius: var(--lumi-sys-shape--small, 4px); }
-button.lumi-sort-btn:hover, .lumi-sort-btn:hover { background-color: var(--lumi-sys-color--on-surface-low, rgba(0, 0, 0, 0.06)) !important; }
-button.lumi-sort-btn:focus-visible, .lumi-sort-btn:focus-visible { outline: 2px solid var(--lumi-sys-color--on-surface-default, #000000) !important; outline-offset: 2px !important; }
-
-/* --- Code block --- */
-.lumi-code-block { background-color: var(--lumi-sys-color--code-background, #000000); border-radius: var(--lumi-sys-shape--xl-max, 40px); padding: 32px; display: flex; flex-direction: column; gap: var(--lumi-sys-spacing--l, 16px); width: 100%; box-sizing: border-box; }
-.lumi-code-header { display: flex; justify-content: space-between; align-items: center; width: 100%; }
-.lumi-code-lang { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 15px; font-weight: 500; font-variation-settings: "wght" 540, "wdth" 92, "opsz" 15; color: var(--lumi-sys-color--code-primary-text, #ffffff); }
-.lumi-code-copy { background: transparent; border-width: medium; border-style: none; border-color: currentcolor; border-image: none; color: var(--lumi-sys-color--code-primary-text, #ffffff); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: var(--lumi-sys-shape--full, 999px); transition: background-color 0.2s; }
-.lumi-code-copy:hover { background-color: rgba(255, 255, 255, 0.1); }
-.lumi-code-snippet { margin: 0px; overflow-x: auto; width: 100%; }
-.lumi-code-snippet code { font-family: var(--ff-mono, 'Google Sans Code', monospace); font-size: 15px; line-height: 20px; color: var(--lumi-sys-color--code-primary-text, #ffffff); display: block; white-space: pre; }
-
-/* --- Section / prose --- */
-.lumi-section { display: flex; flex-direction: column; align-items: flex-start; width: 100%; }
-.lumi-section h1 { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 28px; line-height: 36px; font-weight: 350; font-variation-settings: "wght" 350, "wdth" 100, "opsz" 28; color: var(--lumi-sys-color--on-surface, #000000); margin-top: var(--lumi-sys-spacing--m, 12px); margin-bottom: var(--lumi-sys-spacing--xxl, 24px); }
-.lumi-section h1:first-child { margin-top: 0px; }
-.lumi-section h2 { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 24px; line-height: 28px; font-weight: 380; font-variation-settings: "wght" 380, "wdth" 100, "opsz" 24; color: var(--lumi-sys-color--on-surface, #000000); margin-top: var(--lumi-sys-spacing--m, 12px); margin-bottom: var(--lumi-sys-spacing--m, 12px); }
-.lumi-section h2:first-child { margin-top: 0px; }
-.lumi-section h3 { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 20px; line-height: 24px; font-weight: 470; font-variation-settings: "wght" 470, "wdth" 94, "opsz" 20; color: var(--lumi-sys-color--on-surface, #000000); margin-top: var(--lumi-sys-spacing--m, 12px); margin-bottom: var(--lumi-sys-spacing--xs, 4px); }
-.lumi-section h3:first-child { margin-top: 0px; }
-.lumi-section p { font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 17px; line-height: 24px; font-weight: 400; font-variation-settings: "wght" 400, "wdth" 92, "opsz" 17; color: var(--lumi-sys-color--on-surface, #000000); margin-top: 0px; margin-bottom: var(--lumi-sys-spacing--m, 12px); }
-.lumi-section p:last-child { margin-bottom: 0px; }
-.lumi-section ul { list-style: none; padding: 0px; margin: 0 0 var(--lumi-sys-spacing--m, 12px) 0; width: 100%; }
-.lumi-section ul:last-child { margin-bottom: 0px; }
-.lumi-section li { position: relative; padding-left: 40px; padding-bottom: 12px; font-family: var(--ff-sans, 'Google Sans Flex', sans-serif); font-size: 17px; line-height: 24px; font-weight: 400; font-variation-settings: "wght" 400, "wdth" 92, "opsz" 17; color: var(--lumi-sys-color--on-surface, #000000); box-sizing: border-box; }
-.lumi-section li:last-child { padding-bottom: 0px; }
-.lumi-section li::before { content: "○"; position: absolute; left: 3.5px; top: 0px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-family: var(--ff-mono, 'Google Sans Code', monospace); font-size: 15px; font-weight: 650; font-variation-settings: "MONO" 1, "wght" 650; color: var(--lumi-sys-color--on-surface, #000000); }
-.lumi-section li ul { margin-top: 12px; margin-bottom: 0px; padding-left: 40px; }
-
-/* --- Chart legend (1:1 series color match) --- */
-.lumi-chart-header, .lumi-chart-title { margin-bottom: 32px; }
-.lumi-chart-legend { display: flex; justify-content: center; align-items: center; gap: 24px; margin-top: 32px; padding-top: 0px; width: 100%; flex-wrap: wrap; }
-.lumi-legend-item { display: inline-flex; align-items: center; gap: 8px; }
-.lumi-legend-dot { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.lumi-legend-dot-swatch { width: 20px; height: 20px; border-radius: 50%; display: block; }
-span.lumi-legend-dot[style*="background"] { width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
-.lumi-legend-label { font-family: var(--ff-mono, 'Google Sans Code', monospace); font-style: italic; font-size: 13px; font-weight: 400; line-height: 20px; color: var(--lumi-sys-color--on-surface, #000000); font-variation-settings: "MONO" 0; white-space: nowrap; }
-
-/* Canonical themed <select>. Uses element+class specificity (select.lumi-select)
-   so it intentionally wins over any model hand-rolled `.lumi-select` rule: the
-   runtime stylesheet is injected before widget <style> blocks, so a bare
-   `.lumi-select` (same specificity, later) would otherwise override it. This
-   provides appearance:none + a theme-neutral chevron so no native OS arrow leaks. */
-select.lumi-select {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  width: 100%;
-  padding: var(--lumi-sys-spacing--s, 8px) 40px var(--lumi-sys-spacing--s, 8px)
-    var(--lumi-sys-spacing--m, 12px);
-  border: 1px solid var(--stroke-default);
-  border-radius: var(--r-full, 999px);
-  background-color: var(--surface);
-  color: var(--on-surface);
-  font-family: var(--ff-sans, 'Google Sans Flex', sans-serif);
-  font-size: 15px;
-  line-height: 20px;
-  cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2380868b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 14px center;
-  background-size: 14px;
-}
-select.lumi-select:focus-visible {
-  outline: 2px solid var(--lumi-sys-color--accent-fixed, #3186ff);
-  outline-offset: 2px;
-}
-
-/* Toggle / filter chip. Models frequently emit `<button class="lumi-chip">`
-   (or `.lumi-chip-btn`, `.lumi-filter-btn`, `[class^="lumi-chip-"]`, with
-   `.is-active`/`.active`/`.is-selected`) for toggle pills; without a
-   canonical rule these fall back to native (retro) browser button chrome.
-   Theme-aware via runtime tokens so it is correct in light and dark. */
-.lumi-chip,
-[class^="lumi-chip"],
-[class*=" lumi-chip"],
-[class^="lumi-pill"],
-[class*=" lumi-pill"] {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--lumi-sys-spacing--s, 8px);
-  min-height: 32px;
-  padding: 0 16px;
-  font-family: var(--ff-sans, 'Google Sans Flex', 'Google Sans', sans-serif);
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 20px;
-  color: var(--lumi-sys-color--on-surface-default, #1f1f1f);
-  background: var(--lumi-sys-color--surface-dim, #f2f0f0);
-  border: 1px solid transparent;
-  border-radius: var(--lumi-sys-shape--full, 999px);
-  cursor: pointer;
-  user-select: none;
-  white-space: nowrap;
-  box-sizing: border-box;
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
-  -webkit-appearance: none;
-  appearance: none;
-}
-.lumi-chip:hover,
-[class^="lumi-chip"]:hover,
-[class*=" lumi-chip"]:hover,
-[class^="lumi-pill"]:hover,
-[class*=" lumi-pill"]:hover {
-  background: var(--lumi-sys-color--surface-container-high, #e6e6e6);
-}
-.lumi-chip.is-active,
-.lumi-chip.active,
-.lumi-chip.is-selected,
-.lumi-chip.selected,
-.lumi-chip[aria-pressed="true"],
-.lumi-chip[aria-selected="true"],
-[class^="lumi-chip"].is-active,
-[class^="lumi-chip"].active,
-[class^="lumi-chip"].is-selected,
-[class^="lumi-chip"].selected,
-[class^="lumi-chip"][aria-pressed="true"],
-[class^="lumi-chip"][aria-selected="true"],
-[class*=" lumi-chip"].is-active,
-[class*=" lumi-chip"].active,
-[class*=" lumi-chip"].is-selected,
-[class*=" lumi-chip"].selected,
-[class*=" lumi-chip"][aria-pressed="true"],
-[class*=" lumi-chip"][aria-selected="true"],
-[class^="lumi-pill"].is-active,
-[class^="lumi-pill"].active,
-[class^="lumi-pill"].is-selected,
-[class^="lumi-pill"].selected,
-[class^="lumi-pill"][aria-pressed="true"],
-[class^="lumi-pill"][aria-selected="true"],
-[class*=" lumi-pill"].is-active,
-[class*=" lumi-pill"].active,
-[class*=" lumi-pill"].is-selected,
-[class*=" lumi-pill"].selected,
-[class*=" lumi-pill"][aria-pressed="true"],
-[class*=" lumi-pill"][aria-selected="true"] {
-  color: var(--lumi-sys-color--on-surface-default, #000000);
-  background: var(--lumi-sys-color--accent-container, #dcf1ff);
-  border-color: var(--lumi-sys-color--primary, #3186ff);
-  font-weight: 600;
-}
-.lumi-chip:focus-visible,
-[class^="lumi-chip"]:focus-visible,
-[class*=" lumi-chip"]:focus-visible,
-[class^="lumi-pill"]:focus-visible,
-[class*=" lumi-pill"]:focus-visible {
-  outline: 2px solid var(--lumi-sys-color--accent-fixed, #3186ff);
-  outline-offset: 2px;
-}
-
-/* ============================================================
- * DIAGRAM GUARD — SVG <text> is fill-only.
- *   An inherited group stroke (e.g. `.node:hover { stroke }` on a <g>)
- *   otherwise cascades into child <text>, thickening glyph outlines
- *   (fake-bold) and recoloring the label. Highlight strokes belong on
- *   shapes (rect/path); text never paints a stroke.
- * ============================================================ */
-svg text { stroke: none; paint-order: fill; }
-
-/* ============================================================
- * 6. HIGH CONTRAST MODE (Windows Forced Colors)
- *    Ensures buttons, selectable pills/tabs/segments, sliders, and switches
- *    remain clearly identifiable and convey active/selected state in
- *    @media (forced-colors: active).
- * ============================================================ */
-@media (forced-colors: active) {
   button,
-  .lumi-btn,
-  [class^="lumi-btn-"],
-  [class*=" lumi-btn-"],
-  .lumi-chip,
-  [class^="lumi-chip"],
-  [class*=" lumi-chip"],
-  [class^="lumi-pill"],
-  [class*=" lumi-pill"],
-  .lumi-segmented-btn,
-  .lumi-tab {
-    border: 1px solid ButtonBorder !important;
+  input {
+    font: inherit;
   }
 
-  button.active,
-  button.is-active,
-  button.selected,
-  button.is-selected,
-  button[aria-pressed="true"],
-  button[aria-selected="true"],
-  .lumi-btn.active,
-  .lumi-btn.is-active,
-  .lumi-btn.selected,
-  .lumi-btn.is-selected,
-  .lumi-btn[aria-pressed="true"],
-  .lumi-btn[aria-selected="true"],
-  .lumi-chip.active,
-  .lumi-chip.is-active,
-  .lumi-chip.selected,
-  .lumi-chip.is-selected,
-  .lumi-chip[aria-pressed="true"],
-  .lumi-chip[aria-selected="true"],
-  [class^="lumi-chip"].active,
-  [class^="lumi-chip"].is-active,
-  [class^="lumi-chip"].selected,
-  [class^="lumi-chip"].is-selected,
-  [class^="lumi-chip"][aria-pressed="true"],
-  [class*=" lumi-chip"].active,
-  [class*=" lumi-chip"].is-active,
-  [class*=" lumi-chip"].selected,
-  [class*=" lumi-chip"].is-selected,
-  [class*=" lumi-chip"][aria-pressed="true"],
-  [class^="lumi-pill"].active,
-  [class^="lumi-pill"].is-active,
-  [class^="lumi-pill"][aria-pressed="true"],
-  [class*=" lumi-pill"].active,
-  [class*=" lumi-pill"].is-active,
-  [class*=" lumi-pill"][aria-pressed="true"],
-  .lumi-segmented-btn.active,
-  .lumi-segmented-btn.is-active,
-  .lumi-segmented-btn.selected,
-  .lumi-segmented-btn.is-selected,
-  .lumi-segmented-btn[aria-pressed="true"],
-  .lumi-segmented-btn[aria-selected="true"],
-  .lumi-tab.active,
-  .lumi-tab.is-active,
-  .lumi-tab.selected,
-  .lumi-tab.is-selected,
-  .lumi-tab[aria-pressed="true"],
-  .lumi-tab[aria-selected="true"] {
-    forced-color-adjust: none;
-    background-color: Highlight !important;
-    color: HighlightText !important;
-    border-color: Highlight !important;
-    outline: 2px solid Highlight;
-    outline-offset: -2px;
+  button {
+    cursor: pointer;
   }
 
-  input[type="range"],
-  .lumi-slider {
-    forced-color-adjust: none;
-    width: 100% !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-  }
-  input[type="range"]::-webkit-slider-runnable-track,
-  .lumi-slider::-webkit-slider-runnable-track {
-    background-image: none !important;
-    background-color: Canvas !important;
-    border: 1px solid ButtonBorder !important;
-    height: 6px !important;
-  }
-  input[type="range"]::-webkit-slider-thumb,
-  .lumi-slider::-webkit-slider-thumb {
-    background-image: none !important;
-    background-color: ButtonText !important;
-    border: 2px solid Canvas !important;
-    outline: 2px solid ButtonBorder !important;
-    width: 20px !important;
-    height: 20px !important;
-    margin-top: -8px !important;
-  }
-  input[type="range"]:hover::-webkit-slider-thumb,
-  input[type="range"]:focus-visible::-webkit-slider-thumb,
-  .lumi-slider:hover::-webkit-slider-thumb,
-  .lumi-slider:focus-visible::-webkit-slider-thumb {
-    background-color: Highlight !important;
-    outline-color: Highlight !important;
+  button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
   }
 
-  .lumi-progress-bar {
-    forced-color-adjust: none;
-    background-color: Canvas !important;
-    border: 1px solid ButtonBorder !important;
-  }
-  .lumi-progress-fill {
-    forced-color-adjust: none;
-    background-color: Highlight !important;
+  .page {
+    width: min(1080px, 100%);
+    margin: 0 auto;
+    padding: 28px 18px 44px;
   }
 
-  .lumi-switch__track {
-    forced-color-adjust: none;
-    background-color: Canvas !important;
-    border: 2px solid ButtonBorder !important;
-  }
-  .lumi-switch__thumb,
-  .lumi-switch__track::after {
-    background-color: ButtonText !important;
-  }
-  .lumi-switch input[type="checkbox"]:checked + .lumi-switch__track {
-    background-color: Highlight !important;
-    border-color: Highlight !important;
-  }
-  .lumi-switch input[type="checkbox"]:checked + .lumi-switch__track .lumi-switch__thumb,
-  .lumi-switch input[type="checkbox"]:checked + .lumi-switch__track::after {
-    background-color: HighlightText !important;
+  header {
+    margin-bottom: 24px;
   }
 
-  .lumi-checkbox {
-    forced-color-adjust: none;
-    border: 2px solid ButtonBorder !important;
-    background-color: Canvas !important;
+  h1 {
+    font-size: clamp(1.6rem, 4vw, 2.1rem);
+    line-height: 1.2;
+    margin: 0 0 8px;
   }
-  .lumi-checkbox-label input[type="checkbox"]:checked ~ .lumi-checkbox,
-  .lumi-checkbox-label input[type="checkbox"]:indeterminate ~ .lumi-checkbox {
-    background-color: Highlight !important;
-    border-color: Highlight !important;
-  }
-  .lumi-checkbox .lumi-checkmark {
-    color: HighlightText !important;
-    fill: HighlightText !important;
-  }
-}
 
+  h2 {
+    margin: 0 0 14px;
+    font-size: 1.1rem;
+  }
+
+  h3 {
+    margin: 0 0 12px;
+    font-size: 1rem;
+  }
+
+  p {
+    margin: 8px 0;
+  }
+
+  .muted {
+    color: var(--muted);
+    font-size: 0.92rem;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(300px, 440px) minmax(300px, 1fr);
+    gap: 22px;
+    align-items: start;
+  }
+
+  .card {
+    min-width: 0;
+    padding: 22px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+  }
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 9px;
+    width: 100%;
+    max-width: 390px;
+    margin: 0 auto;
+    aspect-ratio: 1;
+    touch-action: manipulation;
+  }
+
+  .tile {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 0;
+    border: 1px solid #cdd7e4;
+    border-radius: 13px;
+    background: var(--tile);
+    color: #243449;
+    font-weight: 750;
+    font-size: clamp(1.7rem, 6vw, 2.7rem);
+    user-select: none;
+    transition: background-color 150ms ease, border-color 150ms ease;
+  }
+
+  .tile:not(.blank):hover:not(:disabled) {
+    background: var(--tile-hover);
+    border-color: #9db2cf;
+  }
+
+  .tile:focus-visible,
+  button:focus-visible,
+  input:focus-visible {
+    outline: 3px solid #86a6ff;
+    outline-offset: 3px;
+  }
+
+  .tile.lit {
+    background: #fff0c2;
+    border-color: var(--light-border);
+    box-shadow: inset 0 0 0 1px rgba(217, 148, 20, 0.2);
+  }
+
+  .tile.lit:hover:not(:disabled) {
+    background: #ffe5a0;
+  }
+
+  .tile .number {
+    line-height: 1;
+  }
+
+  .light-indicator {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    width: 10px;
+    height: 10px;
+    border: 1px solid #aab6c4;
+    border-radius: 50%;
+    background: transparent;
+  }
+
+  .tile.lit .light-indicator {
+    background: var(--light);
+    border-color: var(--light-border);
+    box-shadow: 0 0 9px rgba(255, 185, 47, 0.8);
+  }
+
+  .tile.blank {
+    background: #f8fafc;
+    border: 2px dashed #d8e0e9;
+    box-shadow: none;
+    cursor: default;
+  }
+
+  .blank-mark {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: #e3e8ef;
+  }
+
+  .tile-number-label {
+    position: absolute;
+    left: 8px;
+    bottom: 5px;
+    font-size: 0.6rem;
+    font-weight: 500;
+    color: #667085;
+  }
+
+  .board-note {
+    margin-top: 14px;
+    font-size: 0.9rem;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  .notation-box {
+    margin-top: 18px;
+    padding: 13px 14px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #f9fafb;
+  }
+
+  .field-label {
+    display: block;
+    margin: 0 0 7px;
+    font-weight: 650;
+    font-size: 0.92rem;
+  }
+
+  code,
+  .state-notation,
+  .move-sequence {
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono",
+      monospace;
+    overflow-wrap: anywhere;
+  }
+
+  .state-notation {
+    display: block;
+    font-size: 0.94rem;
+    line-height: 1.7;
+    white-space: pre-wrap;
+  }
+
+  .button-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin-top: 16px;
+  }
+
+  .button {
+    min-height: 41px;
+    padding: 9px 14px;
+    border: 1px solid #cdd5df;
+    border-radius: 9px;
+    background: white;
+    color: var(--text);
+    font-weight: 620;
+  }
+
+  .button:hover:not(:disabled) {
+    background: #f0f3f8;
+  }
+
+  .button.primary {
+    color: white;
+    background: var(--blue);
+    border-color: var(--blue);
+  }
+
+  .button.primary:hover:not(:disabled) {
+    background: var(--blue-hover);
+  }
+
+  .button.danger {
+    color: var(--danger);
+    border-color: #e6b6b3;
+  }
+
+  .section + .section {
+    margin-top: 25px;
+    padding-top: 22px;
+    border-top: 1px solid var(--line);
+  }
+
+  .field {
+    width: 100%;
+    min-height: 43px;
+    padding: 10px 12px;
+    border: 1px solid #cdd5df;
+    border-radius: 9px;
+    background: #fff;
+    color: var(--text);
+  }
+
+  .field[aria-invalid="true"] {
+    border-color: var(--danger);
+  }
+
+  .help-text {
+    margin-top: 7px;
+    color: var(--muted);
+    font-size: 0.86rem;
+  }
+
+  .status {
+    padding: 12px 13px;
+    margin-top: 18px;
+    border-radius: 9px;
+    border: 1px solid var(--line);
+    background: #f9fafb;
+    color: var(--text);
+    font-size: 0.92rem;
+    overflow-wrap: anywhere;
+  }
+
+  .status.error {
+    color: var(--danger);
+    background: #fff7f6;
+    border-color: #f0c6c2;
+  }
+
+  .status.success {
+    color: var(--success);
+    background: #f3fbf6;
+    border-color: #c7e6d2;
+  }
+
+  .solution-panel {
+    margin-top: 18px;
+    padding: 17px;
+    border: 1px solid #cbd8f8;
+    border-radius: 12px;
+    background: #f8faff;
+  }
+
+  .solution-panel[hidden] {
+    display: none;
+  }
+
+  .distance-metric {
+    margin-bottom: 12px;
+  }
+
+  .distance-value {
+    display: block;
+    margin-top: 3px;
+    font-size: 1.65rem;
+    line-height: 1.3;
+    font-weight: 750;
+  }
+
+  .move-sequence {
+    display: block;
+    padding: 11px;
+    margin-top: 7px;
+    border-radius: 8px;
+    border: 1px solid #d6dff4;
+    background: white;
+    color: #213d87;
+    line-height: 1.9;
+    word-break: break-all;
+  }
+
+  .solution-details {
+    margin-top: 13px;
+    color: var(--muted);
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;
+  }
+
+  .legend {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 11px 0 0;
+    font-size: 0.88rem;
+    color: var(--muted);
+  }
+
+  .legend-light {
+    width: 12px;
+    height: 12px;
+    flex: 0 0 12px;
+    border-radius: 50%;
+    background: var(--light);
+    border: 1px solid var(--light-border);
+  }
+
+  footer {
+    margin-top: 24px;
+    color: var(--muted);
+    font-size: 0.84rem;
+  }
+
+  @media (max-width: 760px) {
+    .page {
+      padding: 20px 12px 32px;
+    }
+
+    .layout {
+      grid-template-columns: 1fr;
+    }
+
+    .card {
+      padding: 17px;
+    }
+
+    .board {
+      max-width: 420px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 </style>
-<style id="lumi-surface-button-fallbacks">
-.widget-container {
-  width: 100% !important;
-  max-width: 100% !important;
-  padding-inline: 0 !important;
-  box-sizing: border-box;
-}
-:root {
-  --lumi-sys-color--surface-translucent: rgba(255, 255, 255, 0.88);
-  --surface-translucent: var(--lumi-sys-color--surface-translucent, rgba(255, 255, 255, 0.88));
-  --surface-glass: var(--lumi-sys-color--surface-translucent, rgba(255, 255, 255, 0.88));
-}
-:root[data-theme="dark"], body.dark-mode {
-  --lumi-sys-color--surface-translucent: rgba(24, 24, 27, 0.88);
-  --surface-translucent: rgba(24, 24, 27, 0.88);
-  --surface-glass: rgba(24, 24, 27, 0.88);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --lumi-sys-color--surface-translucent: rgba(24, 24, 27, 0.88);
-    --surface-translucent: rgba(24, 24, 27, 0.88);
-    --surface-glass: rgba(24, 24, 27, 0.88);
-  }
-}
-button {
-  appearance: none;
-  -webkit-appearance: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 8px 18px;
-  font-family: var(--ff-sans, 'Google Sans Flex', sans-serif);
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 18px;
-  color: var(--on-surface, #000000);
-  background-color: var(--lumi-sys-color--surface-bright, #ffffff);
-  border: 1px solid var(--stroke-default, #e3e3e3);
-  border-radius: 999px;
-  cursor: pointer;
-  box-sizing: border-box;
-}
-button:hover {
-  background-color: var(--surface-container-high, #e6e6e6);
-}
-button.active, button.is-active, button.selected, button.is-selected, button[aria-pressed="true"], button[aria-selected="true"] {
-  background-color: var(--accent-container, #dcf1ff);
-  color: var(--accent-fixed, #3186ff);
-  border-color: transparent;
-}
-.lumi-btn, [class^="lumi-btn-"], [class*=" lumi-btn-"] {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 38px;
-  padding: 8px 18px;
-  background-color: var(--lumi-sys-color--surface-bright, #ffffff);
-  color: var(--on-surface, #000000);
-  border: 1px solid var(--stroke-default, #e3e3e3);
-  border-radius: 999px;
-  box-sizing: border-box;
-}
-.lumi-btn--primary, .lumi-btn-primary {
-  background-color: var(--lumi-sys-color--accent, #9dd2ff);
-  color: var(--lumi-sys-color--on-surface-default, #000000);
-  border-color: transparent;
-}
-.lumi-btn--primary:hover, .lumi-btn-primary:hover {
-  background-color: var(--lumi-sys-color--accent-container, #dcf1ff);
-}
-:where(.lumi-chip, [class^="lumi-chip"], [class*=" lumi-chip"], [class^="lumi-pill"], [class*=" lumi-pill"]) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 32px;
-  padding: 0 16px;
-  font-family: var(--ff-sans, 'Google Sans Flex', sans-serif);
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--on-surface, #1f1f1f);
-  background: var(--surface-dim, #f2f0f0);
-  border: 1px solid transparent;
-  border-radius: 999px;
-  cursor: pointer;
-}
-:where(.lumi-chip.is-active, .lumi-chip.active, [class^="lumi-chip"].is-active, [class^="lumi-chip"].active, [class*=" lumi-chip"].is-active, [class*=" lumi-chip"].active, [class^="lumi-pill"].is-active, [class^="lumi-pill"].active) {
-  color: var(--accent-fixed, #3186ff);
-  background: var(--accent-container, rgba(49, 134, 255, 0.14));
-  border-color: transparent;
-  font-weight: 600;
-}
-</style>
-
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Luminous Slide & Glow</title>
-  <style>
-    *, *::before, *::after {
-      box-sizing: border-box;
-    }
-    
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      overflow-x: hidden;
-      overflow-y: hidden;
-      background: transparent;
-      font-family: var(--ff-sans, system-ui, -apple-system, sans-serif);
-      color: var(--on-surface);
-    }
-
-    .widget-container {
-      width: 100%;
-      min-height: 280px;
-      padding: var(--lumi-sys-spacing--m, 12px);
-      display: flex;
-      flex-direction: column;
-      gap: var(--lumi-sys-spacing--m, 12px);
-      box-sizing: border-box;
-    }
-
-    .header-card {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: var(--lumi-sys-spacing--m, 12px) var(--lumi-sys-spacing--l, 16px);
-      background: var(--surface-dim);
-      border-radius: var(--r-m, 12px);
-      border: 1px solid var(--stroke-default);
-    }
-
-    .header-info {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .header-title {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 600;
-      color: var(--on-surface);
-      line-height: 1.2;
-    }
-
-    .header-sub {
-      margin: 0;
-      font-size: 13px;
-      color: var(--on-surface-variant);
-      font-family: var(--ff-mono);
-    }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: var(--r-full, 999px);
-      font-size: 12px;
-      font-weight: 500;
-      font-family: var(--ff-mono);
-      background: var(--surface-container);
-      color: var(--on-surface-variant);
-      border: 1px solid var(--stroke-default);
-      transition: all 0.2s ease;
-    }
-
-    .status-badge.is-solved {
-      background: var(--positive-container);
-      color: var(--positive);
-      border-color: var(--positive);
-    }
-
-    .status-badge.is-animating {
-      background: var(--accent-container);
-      color: var(--primary);
-      border-color: var(--primary);
-    }
-
-    .widget-viewport {
-      position: relative;
-      width: 100%;
-      height: 340px;
-      overflow: hidden;
-      border-radius: var(--r-m, 12px);
-      background: var(--surface-dim);
-      border: 1px solid var(--stroke-default);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    canvas#puzzleCanvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-      outline: none;
-      cursor: pointer;
-    }
-
-    .control-deck {
-      display: flex;
-      flex-direction: column;
-      gap: var(--lumi-sys-spacing--m, 12px);
-      padding: var(--lumi-sys-spacing--m, 12px);
-      background: var(--surface-dim);
-      border-radius: var(--r-m, 12px);
-      border: 1px solid var(--stroke-default);
-    }
-
-    .button-group {
-      display: flex;
-      align-items: center;
-      gap: var(--lumi-sys-spacing--s, 8px);
-      width: 100%;
-    }
-
-                            .meta-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 12px;
-      font-family: var(--ff-mono);
-      color: var(--on-surface-variant);
-      padding: 0 4px;
-    }
-
-    .meta-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .meta-value {
-      color: var(--on-surface);
-      font-weight: 600;
-    }
-  </style>
-<script id="lumi-os-theme-init">
-(function() {
-  function syncBody() {
-    var dt = document.documentElement.getAttribute('data-theme');
-    if (document.body && (dt === 'dark' || dt === 'light')) {
-      document.body.classList.toggle('dark-mode', dt === 'dark');
-    }
-  }
-  function syncTheme(theme) {
-    if (theme !== 'dark' && theme !== 'light') return;
-    document.documentElement.setAttribute('data-theme', theme);
-    syncBody();
-  }
-  if (typeof MutationObserver === 'function') {
-    new MutationObserver(syncBody).observe(document.documentElement, {
-      attributes: true, attributeFilter: ['data-theme']
-    });
-  }
-  if (typeof document.addEventListener === 'function') {
-    document.addEventListener('DOMContentLoaded', syncBody);
-  }
-  try {
-    var mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
-    if (mq) {
-      var cur = document.documentElement.getAttribute('data-theme');
-      if (!cur) {
-        syncTheme(mq.matches ? 'dark' : 'light');
-      } else {
-        syncTheme(cur);
-      }
-      if (mq.addEventListener) {
-        mq.addEventListener('change', function(e) {
-          syncTheme(e.matches ? 'dark' : 'light');
-        });
-      }
-    }
-  } catch (e) {}
-  window.addEventListener('message', function(e) {
-    if (e.data && (e.data.type === 'set-theme' || e.data.type === 'APPLY_THEME') && e.data.theme) {
-      syncTheme(e.data.theme);
-    }
-  });
-})();
-</script>
 </head>
+
 <body>
+<div class="page">
+  <header>
+    <h1>Sliding Lights Puzzle</h1>
+    <p class="muted">
+      Slide tiles into the blank. Every slide toggles the moved tile and
+      the numbered tiles adjacent to its destination after the move.
+      The blank has no light.
+    </p>
+  </header>
 
-<div class="widget-container">
-  <!-- Header -->
-  <div class="header-card">
-    <div class="header-info">
-      <h2 class="header-title">Slide &amp; Glow Puzzle</h2>
-      <p class="header-sub">Align tiles 1-8 &amp; illuminate all grid slots</p>
-    </div>
-    <div id="statusBadge" class="status-badge is-solved">
-      <span>● Solved</span>
-    </div>
-  </div>
+  <main class="layout">
+    <section class="card" aria-labelledby="gameHeading">
+      <h2 id="gameHeading">Puzzle</h2>
 
-  <!-- Main Canvas Viewport -->
-  <div class="widget-viewport" id="viewportZone">
-    <canvas id="puzzleCanvas" tabindex="0" role="img" aria-label="3x3 sliding lights out puzzle grid"></canvas>
-  </div>
+      <div id="board" class="board" role="group" aria-label="Puzzle board"></div>
 
-  <!-- Control Deck -->
-  <div class="control-deck">
-    <div class="button-group">
-      <button id="btnShuffle" class="lumi-btn-custom lumi-btn-primary" type="button">
-        Watch Shuffle (Slow)
-      </button>
-      <button id="btnReset" class="lumi-btn-custom lumi-btn-secondary" type="button">
-        Reset to Solved
-      </button>
-    </div>
-    <div class="meta-bar">
-      <div class="meta-item">
-        <span>Moves:</span>
-        <span id="moveCount" class="meta-value">0</span>
+      <p class="board-note">
+        Click a tile next to the blank, or use the arrow keys to move a tile
+        in the indicated direction.
+      </p>
+
+      <div class="legend">
+        <span class="legend-light" aria-hidden="true"></span>
+        <span>Light on. Tiles without a glowing indicator have their lights off.</span>
       </div>
-      <div class="meta-item">
-        <span>Lights On:</span>
-        <span id="lightsCount" class="meta-value">9/9</span>
+
+      <div class="notation-box">
+        <span class="field-label">Current state</span>
+        <code id="currentNotation" class="state-notation"></code>
       </div>
-    </div>
-  </div>
+
+      <div class="button-row">
+        <button id="scrambleBtn" class="button primary" data-lock>
+          Scramble
+        </button>
+        <button id="resetBtn" class="button" data-lock>
+          Reset
+        </button>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="controlsHeading">
+      <h2 id="controlsHeading">Controls and solver</h2>
+
+      <section class="section">
+        <h3>Load a custom state</h3>
+
+        <form id="customForm">
+          <label class="field-label" for="customInput">
+            State in puzzle notation
+          </label>
+
+          <input
+            id="customInput"
+            class="field"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            value="1 2 3/4 5 6/7 8 0"
+            placeholder="1 2 3/4 5 -6/7 0 -8"
+            data-lock
+          >
+
+          <p class="help-text">
+            Use three rows separated by slashes. A negative tile has its
+            light on; 0 is the blank. For example:
+            <code>1 2 3/4 5 -6/7 0 -8</code>.
+          </p>
+
+          <div class="button-row">
+            <button type="submit" class="button" data-lock>
+              Load state
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="section">
+        <h3>Shortest solution</h3>
+
+        <p class="muted">
+          The solver finds a shortest sequence of moves from the current
+          state to the solved state. U, L, D and R describe the direction
+          in which the tile moves.
+        </p>
+
+        <div class="button-row">
+          <button id="solveBtn" class="button primary" data-lock>
+            Solve
+          </button>
+        </div>
+
+        <div
+          id="solutionPanel"
+          class="solution-panel"
+          aria-live="polite"
+          hidden
+        >
+          <h3>Solver result</h3>
+
+          <div class="distance-metric">
+            Distance to solved
+            <strong id="distanceValue" class="distance-value">—</strong>
+          </div>
+
+          <div>
+            <span class="field-label">Move sequence</span>
+            <code id="sequenceValue" class="move-sequence"></code>
+          </div>
+
+          <p id="solutionDetails" class="solution-details"></p>
+
+          <div class="button-row">
+            <button id="playBtn" class="button primary" disabled>
+              Play solution at 2 moves/second
+            </button>
+
+            <button id="stopBtn" class="button danger" hidden>
+              Stop playback
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <div id="status" class="status" role="status" aria-live="polite">
+        Ready.
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Scrambling uses Fisher–Yates with inversion-parity tracking to generate
+    a solvable sliding-board permutation. Each numbered tile receives an
+    independent random light bit.
+  </footer>
 </div>
 
 <script>
-  function getCssVar(name) {
-    if (!name) return '';
-    const clean = name.replace(/^var\(/, '').replace(/\)$/, '').trim();
-    return getComputedStyle(document.documentElement).getPropertyValue(clean.startsWith('--') ? clean : '--' + clean).trim();
-  }
+(() => {
+  "use strict";
 
-  // Contrast logic for neon tiles
-  function contrastText(bgHex) {
-    let c = (bgHex || '').trim().replace('#', '');
-    if (c.length === 3) c = c.split('').map(x => x + x).join('');
-    if (c.length !== 6) return '#1a1a1a';
-    const r = parseInt(c.slice(0, 2), 16);
-    const g = parseInt(c.slice(2, 4), 16);
-    const b = parseInt(c.slice(4, 6), 16);
-    const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
-    const L = 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
-    return L > 0.45 ? '#0d130a' : '#ffffff';
-  }
+  // ------------------------------------------------------------
+  // State encoding
+  // ------------------------------------------------------------
+  //
+  // There are 9! possible board permutations and 256 light masks.
+  // A board is encoded as nine base-16 digits, one digit per position.
+  // 0 is the blank; 1 through 8 are numbered tiles.
+  //
+  // The board code uses at most 36 bits. The light mask is stored above
+  // it, so the entire state fits exactly in a JavaScript Number:
+  //
+  //   key = boardCode + lights * 2^36
+  //
+  // This avoids allocating a string for every state explored by BFS.
 
-  // Grid Data Structure: 9 positions (0..8)
-  // Each slot holds a tile object: { val: 0..8, isOn: boolean }
-  let grid = [];
-  let moveCount = 0;
-  let isAnimating = false;
-  let animationQueue = [];
-  let currentAnim = null; // { tileVal, startPos, endPos, progress, duration }
-  let lastTime = 0;
-  let rafId = null;
+  const SOLVED_BOARD = [1, 2, 3, 4, 5, 6, 7, 8, 0];
+  const POW16 = Array.from({ length: 9 }, (_, i) => 16 ** i);
+  const BASE = 2 ** 36;
 
-  const canvas = document.getElementById('puzzleCanvas');
-  const ctx = canvas.getContext('2d');
-  const btnShuffle = document.getElementById('btnShuffle');
-  const btnReset = document.getElementById('btnReset');
-  const statusBadge = document.getElementById('statusBadge');
-  const moveCountEl = document.getElementById('moveCount');
-  const lightsCountEl = document.getElementById('lightsCount');
+  // Move codes are indexed by direction in which the TILE moves.
+  const MOVE_NAMES = ["U", "L", "D", "R"];
+  const MOVE_DELTA = [-3, -1, 3, 1];
 
-  // Initialize Solved State
-  function initSolvedState() {
-    grid = [];
+  // Orthogonally adjacent board positions.
+  const ADJ = Array.from({ length: 9 }, (_, position) => {
+    const row = Math.floor(position / 3);
+    const col = position % 3;
+    const result = [];
+
+    if (row > 0) result.push(position - 3);
+    if (col > 0) result.push(position - 1);
+    if (row < 2) result.push(position + 3);
+    if (col < 2) result.push(position + 1);
+
+    return result;
+  });
+
+  const $ = (id) => document.getElementById(id);
+
+  const boardElement = $("board");
+  const notationElement = $("currentNotation");
+  const statusElement = $("status");
+
+  const solutionPanel = $("solutionPanel");
+  const distanceElement = $("distanceValue");
+  const sequenceElement = $("sequenceValue");
+  const solutionDetailsElement = $("solutionDetails");
+
+  const playButton = $("playBtn");
+  const stopButton = $("stopBtn");
+
+  let board = SOLVED_BOARD.slice();
+  let lights = 0;
+
+  let currentSolution = null;
+  let isSolving = false;
+  let isPlaying = false;
+  let playbackToken = 0;
+
+  const solvedKey = encodeState(SOLVED_BOARD, 0);
+
+  function encodeState(aBoard, aLights) {
+    let boardCode = 0;
+
     for (let i = 0; i < 9; i++) {
-      grid.push({
-        val: (i === 8) ? 0 : i + 1,
-        isOn: true
-      });
-    }
-    moveCount = 0;
-    animationQueue = [];
-    currentAnim = null;
-    updateUI();
-  }
-
-  function getEmptyIndex() {
-    return grid.findIndex(t => t.val === 0);
-  }
-
-  function getValidNeighbors(idx) {
-    const row = Math.floor(idx / 3);
-    const col = idx % 3;
-    const neighbors = [];
-    if (row > 0) neighbors.push(idx - 3);
-    if (row < 2) neighbors.push(idx + 3);
-    if (col > 0) neighbors.push(idx - 1);
-    if (col < 2) neighbors.push(idx + 1);
-    return neighbors;
-  }
-
-  function isAdjacent(idx1, idx2) {
-    const r1 = Math.floor(idx1 / 3), c1 = idx1 % 3;
-    const r2 = Math.floor(idx2 / 3), c2 = idx2 % 3;
-    return Math.abs(r1 - r2) + Math.abs(c1 - c2) === 1;
-  }
-
-  // Toggle light state of target index + its orthogonal neighbors
-  function toggleLightsOut(targetIdx) {
-    const targets = [targetIdx, ...getValidNeighbors(targetIdx)];
-    targets.forEach(i => {
-      grid[i].isOn = !grid[i].isOn;
-    });
-  }
-
-  // Move tile at position `fromIdx` to empty position `toIdx`
-  function applyMove(fromIdx, toIdx, isManual = true) {
-    if (!isAdjacent(fromIdx, toIdx)) return false;
-
-    // Swap tiles in grid array
-    const temp = grid[fromIdx];
-    grid[fromIdx] = grid[toIdx];
-    grid[toIdx] = temp;
-
-    // Toggle lights centered at the moved tile's new position
-    toggleLightsOut(toIdx);
-
-    if (isManual) {
-      moveCount++;
-    }
-    updateUI();
-    return true;
-  }
-
-  function checkVictory() {
-    for (let i = 0; i < 8; i++) {
-      if (grid[i].val !== i + 1) return false;
-    }
-    if (grid[8].val !== 0) return false;
-    return grid.every(t => t.isOn);
-  }
-
-  function updateUI() {
-    if (moveCountEl) moveCountEl.textContent = moveCount;
-    const onCount = grid.filter(t => t.isOn).length;
-    if (lightsCountEl) lightsCountEl.textContent = `${onCount}/9`;
-
-    const victory = checkVictory();
-    if (isAnimating) {
-      statusBadge.className = 'status-badge is-animating';
-      if (statusBadge) statusBadge.innerHTML = '<span>● Shuffling...</span>';
-      btnShuffle.disabled = true;
-      btnReset.disabled = true;
-    } else if (victory) {
-      statusBadge.className = 'status-badge is-solved';
-      if (statusBadge) statusBadge.innerHTML = '<span>★ Solved!</span>';
-      btnShuffle.disabled = false;
-      btnReset.disabled = false;
-    } else {
-      statusBadge.className = 'status-badge';
-      statusBadge.style.background = getCssVar('--surface-container');
-      statusBadge.style.color = getCssVar('--on-surface');
-      statusBadge.style.borderColor = getCssVar('--stroke-default');
-      if (statusBadge) statusBadge.innerHTML = '<span>● Playing</span>';
-      btnShuffle.disabled = false;
-      btnReset.disabled = false;
-    }
-  }
-
-  // Trigger Slow Motion Step-by-Step Shuffle
-  function triggerSlowShuffle() {
-    if (isAnimating) return;
-
-    // Reset to solved base first
-    initSolvedState();
-    isAnimating = true;
-    btnShuffle.disabled = true;
-    btnReset.disabled = true;
-
-    // Generate 15 legal random moves
-    const steps = 15;
-    let tempGridPos = 8; // empty pos
-    let lastFrom = -1;
-    const shuffleSequence = [];
-
-    for (let s = 0; s < steps; s++) {
-      const neighbors = getValidNeighbors(tempGridPos).filter(n => n !== lastFrom);
-      const chosenFrom = neighbors[Math.floor(Math.random() * neighbors.length)];
-      shuffleSequence.push({ from: chosenFrom, to: tempGridPos });
-      lastFrom = tempGridPos;
-      tempGridPos = chosenFrom;
+      boardCode += aBoard[i] * POW16[i];
     }
 
-    // Queue steps with step duration
-    let queueDelay = 0;
-    const STEP_DURATION = 260; // ms per slide
-    const PAUSE_BETWEEN = 90;   // ms pause
-
-    shuffleSequence.forEach((move, i) => {
-      setTimeout(() => {
-        // Start slide animation for step
-        const tileVal = grid[move.from].val;
-        currentAnim = {
-          fromIdx: move.from,
-          toIdx: move.to,
-          tileVal: tileVal,
-          startTime: performance.now(),
-          duration: STEP_DURATION
-        };
-      }, queueDelay);
-
-      queueDelay += STEP_DURATION + PAUSE_BETWEEN;
-    });
-
-    // Complete shuffle sequence
-    setTimeout(() => {
-      isAnimating = false;
-      moveCount = 0; // Reset player moves count for game start
-      updateUI();
-    }, queueDelay + 50);
+    return boardCode + aLights * BASE;
   }
 
-  // Canvas Geometry & Rendering
-  function render(now) {
-    if (!canvas.parentElement) return;
+  function decodeState(key) {
+    const boardCode = key % BASE;
+    const lightMask = Math.floor(key / BASE);
+    const decodedBoard = new Array(9);
 
-    const box = canvas.parentElement;
-    const w = box.clientWidth || 340;
-    const h = box.clientHeight || 340;
-    const dpr = window.devicePixelRatio || 1;
-
-    if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
-      canvas.width = Math.floor(w * dpr);
-      canvas.height = Math.floor(h * dpr);
-    }
-
-    ctx.save();
-    ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, w, h);
-
-    // Grid sizing
-    const padding = 16;
-    const gap = 10;
-    const gridDim = Math.min(w, h) - padding * 2;
-    const tileSize = (gridDim - gap * 2) / 3;
-    const startX = (w - gridDim) / 2;
-    const startY = (h - gridDim) / 2;
-
-    // Resolve color tokens
-    const neonBright = getCssVar('--chart-4') || '#c8f585'; // Bright yellow-green
-    const darkSlate = getCssVar('--surface-container-high') || '#1c1c1c';
-    const gridBg = getCssVar('--surface-dim') || '#141414';
-    const strokeCol = getCssVar('--stroke-default') || '#2d2f38';
-    const textDark = contrastText(neonBright);
-    const textMuted = getCssVar('--on-surface-variant') || 'rgba(255,255,255,0.6)';
-
-    // Draw Board Frame
-    ctx.fillStyle = gridBg;
-    ctx.strokeStyle = strokeCol;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(startX - 6, startY - 6, gridDim + 12, gridDim + 12, 16);
-    ctx.fill();
-    ctx.stroke();
-
-    // Helper: calculate X,Y for grid index 0..8
-    function getTilePos(idx) {
-      const r = Math.floor(idx / 3);
-      const c = idx % 3;
-      return {
-        x: startX + c * (tileSize + gap),
-        y: startY + r * (tileSize + gap)
-      };
-    }
-
-    // Process active sliding animation step
-    let activeFrom = -1;
-    let activeTo = -1;
-    let animPos = null;
-
-    if (currentAnim) {
-      const elapsed = now - currentAnim.startTime;
-      let t = Math.min(1, elapsed / currentAnim.duration);
-      // Ease out cubic
-      t = 1 - Math.pow(1 - t, 3);
-
-      const pStart = getTilePos(currentAnim.fromIdx);
-      const pEnd = getTilePos(currentAnim.toIdx);
-
-      animPos = {
-        x: pStart.x + (pEnd.x - pStart.x) * t,
-        y: pStart.y + (pEnd.y - pStart.y) * t,
-        tileVal: currentAnim.tileVal,
-        isOn: grid[currentAnim.fromIdx].isOn
-      };
-
-      activeFrom = currentAnim.fromIdx;
-      activeTo = currentAnim.toIdx;
-
-      if (elapsed >= currentAnim.duration) {
-        applyMove(currentAnim.fromIdx, currentAnim.toIdx, false);
-        currentAnim = null;
-      }
-    }
-
-    // Draw static slots & non-animating tiles
     for (let i = 0; i < 9; i++) {
-      const pos = getTilePos(i);
-      const tile = grid[i];
+      decodedBoard[i] =
+        Math.floor(boardCode / POW16[i]) % 16;
+    }
 
-      // Empty slot placeholder
-      if (tile.val === 0 || i === activeFrom) {
-        ctx.fillStyle = getCssVar('--surface') || '#0f0f0f';
-        ctx.strokeStyle = getCssVar('--outline') || '#727676';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.roundRect(pos.x, pos.y, tileSize, tileSize, 12);
-        ctx.fill();
-        ctx.stroke();
+    return {
+      boardCode,
+      lights: lightMask,
+      board: decodedBoard,
+      blank: decodedBoard.indexOf(0)
+    };
+  }
+
+  function isValidAdjacentPosition(blank, position) {
+    return ADJ[blank].includes(position);
+  }
+
+  // ------------------------------------------------------------
+  // Light toggling
+  // ------------------------------------------------------------
+
+  // Forward slide:
+  //
+  // The blank is at destination. A tile moves from source into it.
+  // After the slide, the moved tile is at destination and source is blank.
+  // Toggle the moved tile and every other numbered tile adjacent to
+  // destination. The source is skipped because it becomes the blank.
+
+  function toggleForForward(boardBefore, destination, source, tile) {
+    let toggle = 1 << (tile - 1);
+
+    for (const position of ADJ[destination]) {
+      if (position === source) {
         continue;
       }
 
-      // Skip tile currently being animated (drawn in top layer)
-      drawSingleTile(ctx, pos.x, pos.y, tileSize, tile.val, tile.isOn, neonBright, darkSlate, textDark, textMuted);
-    }
+      const adjacentTile = boardBefore[position];
 
-    // Draw animating tile on top
-    if (animPos) {
-      drawSingleTile(ctx, animPos.x, animPos.y, tileSize, animPos.tileVal, animPos.isOn, neonBright, darkSlate, textDark, textMuted);
-    }
-
-    ctx.restore();
-    rafId = requestAnimationFrame(render);
-  }
-
-  function drawSingleTile(ctx, x, y, size, val, isOn, neonBright, darkSlate, textDark, textMuted) {
-    ctx.save();
-
-    // Tile Fill & Shadow
-    if (isOn) {
-      ctx.fillStyle = neonBright;
-      ctx.shadowColor = neonBright;
-      ctx.shadowBlur = 12;
-      ctx.strokeStyle = neonBright;
-    } else {
-      ctx.fillStyle = darkSlate;
-      ctx.shadowColor = 'transparent';
-      ctx.shadowBlur = 0;
-      ctx.strokeStyle = getCssVar('--outline') || '#727676';
-    }
-
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(x, y, size, size, 12);
-    ctx.fill();
-    ctx.stroke();
-
-    // Reset shadow for text
-    ctx.shadowBlur = 0;
-
-    // Tile Number Typography
-    ctx.fillStyle = isOn ? textDark : textMuted;
-    ctx.font = `600 ${Math.floor(size * 0.42)}px var(--ff-sans, sans-serif)`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(val, x + size / 2, y + size / 2 + 1);
-
-    // Indicator Dot for Light Status
-    ctx.beginPath();
-    ctx.arc(x + size - 12, y + 12, 4, 0, Math.PI * 2);
-    ctx.fillStyle = isOn ? textDark : 'rgba(255,255,255,0.2)';
-    ctx.fill();
-
-    ctx.restore();
-  }
-
-  // Handle Manual User Click
-  function handleCanvasClick(e) {
-    if (isAnimating || currentAnim) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
-
-    const box = canvas.parentElement;
-    const w = box.clientWidth || 340;
-    const h = box.clientHeight || 340;
-
-    const padding = 16;
-    const gap = 10;
-    const gridDim = Math.min(w, h) - padding * 2;
-    const tileSize = (gridDim - gap * 2) / 3;
-    const startX = (w - gridDim) / 2;
-    const startY = (h - gridDim) / 2;
-
-    // Detect tile clicked
-    for (let i = 0; i < 9; i++) {
-      const r = Math.floor(i / 3);
-      const c = i % 3;
-      const x = startX + c * (tileSize + gap);
-      const y = startY + r * (tileSize + gap);
-
-      if (clickX >= x && clickX <= x + tileSize && clickY >= y && clickY <= y + tileSize) {
-        const emptyIdx = getEmptyIndex();
-        if (isAdjacent(i, emptyIdx)) {
-          // Trigger manual smooth slide
-          currentAnim = {
-            fromIdx: i,
-            toIdx: emptyIdx,
-            tileVal: grid[i].val,
-            startTime: performance.now(),
-            duration: 160
-          };
-          // Mark manual count update on completion inside render step
-        }
-        break;
+      if (adjacentTile !== 0) {
+        toggle ^= 1 << (adjacentTile - 1);
       }
     }
+
+    return toggle;
   }
 
-  // Event Listeners & Bootstrapping
-  canvas.addEventListener('click', handleCanvasClick);
-  canvas.addEventListener('keydown', (e) => {
-    if (isAnimating || currentAnim) return;
-    const emptyIdx = getEmptyIndex();
-    const r = Math.floor(emptyIdx / 3);
-    const c = emptyIdx % 3;
-    let target = -1;
+  // Reverse BFS:
+  //
+  // The given board is the FINAL board after a forward move. The moved
+  // tile is at destination; the blank is at the source position.
+  //
+  // The predecessor's lights are found by XORing the mask that the
+  // original forward move toggled, evaluated on this final board.
 
-    if (e.key === 'ArrowUp' && r < 2) target = emptyIdx + 3;
-    else if (e.key === 'ArrowDown' && r > 0) target = emptyIdx - 3;
-    else if (e.key === 'ArrowLeft' && c < 2) target = emptyIdx + 1;
-    else if (e.key === 'ArrowRight' && c > 0) target = emptyIdx - 1;
+  function toggleOnFinalBoard(finalBoard, destination, blankPosition) {
+    const movedTile = finalBoard[destination];
+    let toggle = 1 << (movedTile - 1);
 
-    if (target !== -1) {
-      currentAnim = {
-        fromIdx: target,
-        toIdx: emptyIdx,
-        tileVal: grid[target].val,
-        startTime: performance.now(),
-        duration: 160
+    for (const position of ADJ[destination]) {
+      if (position === blankPosition) {
+        continue;
+      }
+
+      const adjacentTile = finalBoard[position];
+
+      if (adjacentTile !== 0) {
+        toggle ^= 1 << (adjacentTile - 1);
+      }
+    }
+
+    return toggle;
+  }
+
+  // ------------------------------------------------------------
+  // Applying and undoing a move in the encoded state graph
+  // ------------------------------------------------------------
+
+  // Apply a move where moveCode is U, L, D, or R describing the direction
+  // the TILE moves. Return null if that move is illegal.
+
+  function applyForwardMove(key, moveCode) {
+    const decoded = decodeState(key);
+    const source = decoded.blank - MOVE_DELTA[moveCode];
+
+    if (
+      source < 0 ||
+      source >= 9 ||
+      !isValidAdjacentPosition(decoded.blank, source)
+    ) {
+      return null;
+    }
+
+    const tile = decoded.board[source];
+
+    const toggle = toggleForForward(
+      decoded.board,
+      decoded.blank,
+      source,
+      tile
+    );
+
+    const nextBoardCode =
+      decoded.boardCode +
+      tile * (POW16[decoded.blank] - POW16[source]);
+
+    const nextLights = decoded.lights ^ toggle;
+
+    return nextBoardCode + nextLights * BASE;
+  }
+
+  // Recover the state BEFORE the forward move represented by moveCode.
+  // The input is the child/resulting state. This is not the same as
+  // simply performing the opposite physical move.
+
+  function undoForwardMove(childKey, moveCode) {
+    const decoded = decodeState(childKey);
+    const destination = decoded.blank + MOVE_DELTA[moveCode];
+
+    if (
+      destination < 0 ||
+      destination >= 9 ||
+      !isValidAdjacentPosition(decoded.blank, destination)
+    ) {
+      return null;
+    }
+
+    const tile = decoded.board[destination];
+
+    const toggle = toggleOnFinalBoard(
+      decoded.board,
+      destination,
+      decoded.blank
+    );
+
+    // In the parent state, the tile was at the child's blank position.
+    const parentBoardCode =
+      decoded.boardCode +
+      tile * (POW16[decoded.blank] - POW16[destination]);
+
+    const parentLights = decoded.lights ^ toggle;
+
+    return parentBoardCode + parentLights * BASE;
+  }
+
+  // Generate all forward transitions from a state.
+  // Each entry is [nextStateKey, moveCode].
+
+  function forwardNeighbours(key) {
+    const decoded = decodeState(key);
+    const neighbours = [];
+
+    for (let moveCode = 0; moveCode < 4; moveCode++) {
+      const source = decoded.blank - MOVE_DELTA[moveCode];
+
+      if (
+        source < 0 ||
+        source >= 9 ||
+        !isValidAdjacentPosition(decoded.blank, source)
+      ) {
+        continue;
+      }
+
+      const tile = decoded.board[source];
+
+      const toggle = toggleForForward(
+        decoded.board,
+        decoded.blank,
+        source,
+        tile
+      );
+
+      const nextBoardCode =
+        decoded.boardCode +
+        tile * (POW16[decoded.blank] - POW16[source]);
+
+      const nextLights = decoded.lights ^ toggle;
+      const nextKey = nextBoardCode + nextLights * BASE;
+
+      neighbours.push([nextKey, moveCode]);
+    }
+
+    return neighbours;
+  }
+
+  // Generate reverse transitions.
+  //
+  // If the current final board has its blank at q and a tile at p,
+  // the predecessor had that tile at q and the blank at p.
+  // The forward move from predecessor to current is the direction
+  // from q to p.
+
+  function reverseNeighbours(key) {
+    const decoded = decodeState(key);
+    const neighbours = [];
+
+    for (let moveCode = 0; moveCode < 4; moveCode++) {
+      const destination = decoded.blank + MOVE_DELTA[moveCode];
+
+      if (
+        destination < 0 ||
+        destination >= 9 ||
+        !isValidAdjacentPosition(decoded.blank, destination)
+      ) {
+        continue;
+      }
+
+      const tile = decoded.board[destination];
+
+      const toggle = toggleOnFinalBoard(
+        decoded.board,
+        destination,
+        decoded.blank
+      );
+
+      const predecessorBoardCode =
+        decoded.boardCode +
+        tile * (POW16[decoded.blank] - POW16[destination]);
+
+      const predecessorLights = decoded.lights ^ toggle;
+
+      const predecessorKey =
+        predecessorBoardCode + predecessorLights * BASE;
+
+      // This moveCode describes the forward move from predecessor
+      // into the current state, so it can be used during reconstruction.
+      neighbours.push([predecessorKey, moveCode]);
+    }
+
+    return neighbours;
+  }
+
+  // ------------------------------------------------------------
+  // Notation and rendering
+  // ------------------------------------------------------------
+
+  function formatState(aBoard, aLights) {
+    const rows = [];
+
+    for (let row = 0; row < 3; row++) {
+      const tokens = [];
+
+      for (let col = 0; col < 3; col++) {
+        const tile = aBoard[row * 3 + col];
+
+        if (
+          tile !== 0 &&
+          (aLights & (1 << (tile - 1))) !== 0
+        ) {
+          tokens.push("-" + tile);
+        } else {
+          tokens.push(String(tile));
+        }
+      }
+
+      rows.push(tokens.join(" "));
+    }
+
+    return rows.join("/");
+  }
+
+  function renderBoard(oldMoveAnimation = null) {
+    boardElement.replaceChildren();
+
+    for (let position = 0; position < 9; position++) {
+      const tile = board[position];
+      const isBlank = tile === 0;
+      const lit =
+        !isBlank &&
+        (lights & (1 << (tile - 1))) !== 0;
+
+      const button = document.createElement("button");
+
+      button.type = "button";
+      button.className = "tile";
+      button.dataset.pos = String(position);
+      button.dataset.tile = String(tile);
+
+      if (isBlank) {
+        button.classList.add("blank");
+        button.disabled = true;
+        button.setAttribute("aria-label", "Blank");
+        button.innerHTML = '<span class="blank-mark"></span>';
+      } else {
+        if (lit) {
+          button.classList.add("lit");
+        }
+
+        button.setAttribute(
+          "aria-label",
+          "Tile " + tile + ", light " + (lit ? "on" : "off")
+        );
+
+        const number = document.createElement("span");
+        number.className = "number";
+        number.textContent = String(tile);
+
+        const indicator = document.createElement("span");
+        indicator.className = "light-indicator";
+        indicator.setAttribute("aria-hidden", "true");
+
+        button.append(number, indicator);
+
+        button.addEventListener("click", () => {
+          if (isSolving || isPlaying) {
+            return;
+          }
+
+          const blank = board.indexOf(0);
+
+          if (!isValidAdjacentPosition(blank, position)) {
+            setStatus("Choose a tile adjacent to the blank.");
+            return;
+          }
+
+          const moveCode = moveCodeFromSource(blank, position);
+
+          if (moveCode !== -1) {
+            performMove(moveCode, true, false);
+          }
+        });
+      }
+
+      if (isSolving || isPlaying) {
+        button.disabled = true;
+      }
+
+      boardElement.appendChild(button);
+    }
+
+    notationElement.textContent = formatState(board, lights);
+
+    if (oldMoveAnimation) {
+      animateMovedTile(oldMoveAnimation);
+    }
+  }
+
+  function moveCodeFromSource(blank, source) {
+    // The source contains the tile before it moves into the blank.
+    if (source === blank + 3) return 0; // U
+    if (source === blank + 1) return 1; // L
+    if (source === blank - 3) return 2; // D
+    if (source === blank - 1) return 3; // R
+    return -1;
+  }
+
+  // Animate the new tile element from its old screen position to the
+  // blank's old screen position. The DOM is recreated after each move,
+  // so this is a simple FLIP-style transform.
+
+  function animateMovedTile(animation) {
+    const movedElement = boardElement.querySelector(
+      '[data-pos="' + animation.destination + '"]'
+    );
+
+    if (!movedElement) {
+      return;
+    }
+
+    const dx = animation.oldRect.left - animation.targetRect.left;
+    const dy = animation.oldRect.top - animation.targetRect.top;
+
+    movedElement.style.transition = "none";
+    movedElement.style.transform =
+      "translate(" + dx + "px, " + dy + "px)";
+
+    // Force layout so the browser registers the starting transform.
+    void movedElement.getBoundingClientRect();
+
+    requestAnimationFrame(() => {
+      if (!movedElement.isConnected) {
+        return;
+      }
+
+      movedElement.style.transition = "transform 180ms ease";
+      movedElement.style.transform = "translate(0, 0)";
+
+      movedElement.addEventListener(
+        "transitionend",
+        () => {
+          movedElement.style.transition = "";
+          movedElement.style.transform = "";
+        },
+        { once: true }
+      );
+    });
+  }
+
+  function isSolved() {
+    if (lights !== 0) {
+      return false;
+    }
+
+    return board.every((tile, i) => tile === SOLVED_BOARD[i]);
+  }
+
+  function setStatus(message, type = "") {
+    statusElement.textContent = message;
+    statusElement.className = "status";
+
+    if (type) {
+      statusElement.classList.add(type);
+    }
+  }
+
+  function clearSolution() {
+    currentSolution = null;
+    solutionPanel.hidden = true;
+    distanceElement.textContent = "—";
+    sequenceElement.textContent = "";
+    solutionDetailsElement.textContent = "";
+    refreshControlState();
+  }
+
+  function refreshControlState() {
+    const locked = isSolving || isPlaying;
+
+    document.querySelectorAll("[data-lock]").forEach((element) => {
+      element.disabled = locked;
+    });
+
+    boardElement.querySelectorAll(".tile").forEach((element) => {
+      element.disabled =
+        locked || element.dataset.tile === "0";
+    });
+
+    playButton.disabled =
+      locked ||
+      currentSolution === null ||
+      currentSolution.length === 0;
+
+    stopButton.hidden = !isPlaying;
+  }
+
+  // ------------------------------------------------------------
+  // Manual puzzle moves
+  // ------------------------------------------------------------
+
+  // Apply one physical move to the live puzzle. Move codes describe
+  // the direction the TILE moves. The toggle is computed before mutating
+  // the board, using the moved tile's destination and all numbered tiles
+  // adjacent to that destination after the slide.
+
+  function performMove(moveCode, animate, preserveSolution) {
+    const blank = board.indexOf(0);
+    const source = blank - MOVE_DELTA[moveCode];
+
+    if (
+      source < 0 ||
+      source >= 9 ||
+      !isValidAdjacentPosition(blank, source)
+    ) {
+      return false;
+    }
+
+    const tile = board[source];
+
+    let animation = null;
+
+    if (animate) {
+      const sourceElement = boardElement.querySelector(
+        '[data-pos="' + source + '"]'
+      );
+      const targetElement = boardElement.querySelector(
+        '[data-pos="' + blank + '"]'
+      );
+
+      if (sourceElement && targetElement) {
+        animation = {
+          destination: blank,
+          oldRect: sourceElement.getBoundingClientRect(),
+          targetRect: targetElement.getBoundingClientRect()
+        };
+      }
+    }
+
+    const toggle = toggleForForward(board, blank, source, tile);
+
+    board[blank] = tile;
+    board[source] = 0;
+    lights ^= toggle;
+
+    if (!preserveSolution) {
+      clearSolution();
+    }
+
+    renderBoard(animation);
+
+    if (!preserveSolution) {
+      if (isSolved()) {
+        setStatus("Solved.", "success");
+      } else {
+        setStatus("Move " + MOVE_NAMES[moveCode] + " completed.");
+      }
+    }
+
+    refreshControlState();
+    return true;
+  }
+
+  // ------------------------------------------------------------
+  // Custom state input
+  // ------------------------------------------------------------
+
+  function parseNotation(input) {
+    const trimmed = input.trim();
+
+    if (!trimmed) {
+      throw new Error("Enter a state.");
+    }
+
+    const rows = trimmed.split(/\s*\/\s*/);
+
+    if (rows.length !== 3) {
+      throw new Error("Enter exactly three rows separated by slashes.");
+    }
+
+    const parsedBoard = [];
+    let parsedLights = 0;
+
+    for (const row of rows) {
+      const tokens = row.trim().split(/\s+/);
+
+      if (tokens.length !== 3) {
+        throw new Error("Each row must contain exactly three tiles.");
+      }
+
+      for (const token of tokens) {
+        if (!/^-?[0-8]$/.test(token)) {
+          throw new Error(
+            "Each tile must be a number from 0 to 8, optionally prefixed by '-'."
+          );
+        }
+
+        const tile = Number(token.replace("-", ""));
+
+        if (token.startsWith("-") && tile === 0) {
+          throw new Error("The blank (0) cannot have its light on.");
+        }
+
+        parsedBoard.push(tile);
+
+        if (token.startsWith("-")) {
+          parsedLights |= 1 << (tile - 1);
+        }
+      }
+    }
+
+    if (new Set(parsedBoard).size !== 9) {
+      throw new Error("Every tile from 0 through 8 must appear exactly once.");
+    }
+
+    return {
+      board: parsedBoard,
+      lights: parsedLights
+    };
+  }
+
+  function loadCustomState(event) {
+    event.preventDefault();
+
+    if (isSolving || isPlaying) {
+      return;
+    }
+
+    const input = $("customInput");
+
+    try {
+      const parsed = parseNotation(input.value);
+
+      board = parsed.board;
+      lights = parsed.lights;
+      input.setAttribute("aria-invalid", "false");
+
+      clearSolution();
+      renderBoard();
+
+      if (inversionParity(board) !== 0) {
+        setStatus(
+          "State loaded. This board permutation has odd inversion parity and cannot reach the solved board."
+        );
+      } else if (isSolved()) {
+        setStatus("State loaded. The puzzle is solved.", "success");
+      } else {
+        setStatus("Custom state loaded.");
+      }
+    } catch (error) {
+      input.setAttribute("aria-invalid", "true");
+      setStatus(error.message, "error");
+    }
+  }
+
+  // ------------------------------------------------------------
+  // Scrambling with Fisher–Yates and parity tracking
+  // ------------------------------------------------------------
+
+  function inversionParity(aBoard) {
+    let inversions = 0;
+
+    for (let i = 0; i < 9; i++) {
+      if (aBoard[i] === 0) {
+        continue;
+      }
+
+      for (let j = i + 1; j < 9; j++) {
+        if (
+          aBoard[j] !== 0 &&
+          aBoard[i] > aBoard[j]
+        ) {
+          inversions++;
+        }
+      }
+    }
+
+    return inversions & 1;
+  }
+
+  // Track inversion parity of the sequence of numbered tiles, ignoring
+  // the blank. This is the relevant solvability invariant for a 3x3 board.
+  //
+  // Swapping two numbered tiles flips that parity.
+  // Swapping the blank with a numbered tile moves that tile past the
+  // numbered tiles between the two positions, so the parity flip is
+  // the parity of the number of such tiles.
+
+  function randomSolvableBoard() {
+    const shuffled = SOLVED_BOARD.slice();
+    let parity = 0;
+
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+
+      if (i === j) {
+        continue;
+      }
+
+      const a = shuffled[i];
+      const b = shuffled[j];
+
+      if (a !== 0 && b !== 0) {
+        parity ^= 1;
+      } else {
+        let between = 0;
+        const low = Math.min(i, j);
+        const high = Math.max(i, j);
+
+        for (let k = low + 1; k < high; k++) {
+          if (shuffled[k] !== 0) {
+            between++;
+          }
+        }
+
+        parity ^= between & 1;
+      }
+
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    // Correct odd parity by swapping two numbered tiles. This changes
+    // the inversion parity exactly once and makes the board solvable.
+    if (parity !== inversionParity(shuffled)) {
+      throw new Error("Internal error in scramble parity tracking.");
+    }
+
+    if (parity !== 0) {
+      const position1 = shuffled.indexOf(1);
+      const position2 = shuffled.indexOf(2);
+
+      [shuffled[position1], shuffled[position2]] =
+        [shuffled[position2], shuffled[position1]];
+
+      parity ^= 1;
+    }
+
+    if (parity !== 0 || inversionParity(shuffled) !== 0) {
+      throw new Error("Could not generate a solvable board.");
+    }
+
+    return shuffled;
+  }
+
+  function scramblePuzzle() {
+    if (isSolving || isPlaying) {
+      return;
+    }
+
+    board = randomSolvableBoard();
+
+    // Choose a random independent light bit for each numbered tile.
+    lights = 0;
+
+    for (let tile = 1; tile <= 8; tile++) {
+      if (Math.random() < 0.5) {
+        lights |= 1 << (tile - 1);
+      }
+    }
+
+    clearSolution();
+
+    // No animation for the random scramble.
+    renderBoard();
+
+    setStatus("Scrambled. The sliding-board permutation is solvable.");
+  }
+
+  function resetPuzzle() {
+    if (isSolving || isPlaying) {
+      return;
+    }
+
+    board = SOLVED_BOARD.slice();
+    lights = 0;
+
+    clearSolution();
+    renderBoard();
+    setStatus("Reset to the solved state.", "success");
+  }
+
+  // ------------------------------------------------------------
+  // Bidirectional BFS solver
+  // ------------------------------------------------------------
+  //
+  // The graph is directed because the light changes depend on the
+  // destination of each forward move.
+  //
+  // forwardSeen: start -> state using ordinary forward transitions.
+  // reverseSeen: goal -> predecessor using reversed transitions.
+  //
+  // Each Map value packs distance and a move code:
+  //   value = distance * 8 + moveCode
+  //
+  // For forwardSeen, moveCode is the move used to reach that state.
+  // For reverseSeen, moveCode is the forward move from that state toward
+  // the next state on the route to the goal.
+  //
+  // Only the move is stored, rather than a parent state key: previous or
+  // next states can be reconstructed from the board and move code.
+  //
+  // Expansions process a complete BFS layer. Among intersections found
+  // during that layer, the one with the smallest total distance is used.
+
+  function packInfo(distance, moveCode) {
+    return distance * 8 + moveCode;
+  }
+
+  function infoDistance(info) {
+    return Math.floor(info / 8);
+  }
+
+  function infoMove(info) {
+    return info % 8;
+  }
+
+  function yieldToBrowser() {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  function reconstructSolution(
+    meetingKey,
+    startKey,
+    goalKey,
+    forwardSeen,
+    reverseSeen
+  ) {
+    const prefix = [];
+    let key = meetingKey;
+    let guard = 0;
+
+    // Follow the forward search tree backwards from the meeting state
+    // to the start. The action attached to a child lets us reverse it.
+    while (key !== startKey) {
+      const info = forwardSeen.get(key);
+
+      if (info === undefined) {
+        throw new Error("Could not reconstruct the forward path.");
+      }
+
+      const moveCode = infoMove(info);
+
+      if (moveCode < 0 || moveCode > 3) {
+        throw new Error("Invalid move in the forward search tree.");
+      }
+
+      prefix.push(MOVE_NAMES[moveCode]);
+      key = undoForwardMove(key, moveCode);
+
+      if (key === null || ++guard > forwardSeen.size + 1) {
+        throw new Error("Invalid forward-path reconstruction.");
+      }
+    }
+
+    prefix.reverse();
+
+    // Follow the reverse tree forwards from the meeting state to solved.
+    const suffix = [];
+    key = meetingKey;
+    guard = 0;
+
+    while (key !== goalKey) {
+      const info = reverseSeen.get(key);
+
+      if (info === undefined) {
+        throw new Error("Could not reconstruct the reverse path.");
+      }
+
+      const moveCode = infoMove(info);
+
+      if (moveCode < 0 || moveCode > 3) {
+        throw new Error("Invalid move in the reverse search tree.");
+      }
+
+      suffix.push(MOVE_NAMES[moveCode]);
+      key = applyForwardMove(key, moveCode);
+
+      if (key === null || ++guard > reverseSeen.size + 1) {
+        throw new Error("Invalid reverse-path reconstruction.");
+      }
+    }
+
+    return prefix.concat(suffix).join("");
+  }
+
+  async function bidirectionalSolve(startKey) {
+    if (startKey === solvedKey) {
+      return {
+        moves: "",
+        distance: 0,
+        forwardCount: 1,
+        reverseCount: 1
       };
     }
-  });
 
-  btnShuffle.addEventListener('click', triggerSlowShuffle);
-  btnReset.addEventListener('click', () => {
-    if (isAnimating) return;
-    initSolvedState();
-  });
+    const forwardSeen = new Map();
+    const reverseSeen = new Map();
 
-  // Init Game State & Render Loop
-  initSolvedState();
-  rafId = requestAnimationFrame(render);
+    // Move code 4 is a root sentinel; actual moves are 0 through 3.
+    forwardSeen.set(startKey, packInfo(0, 4));
+    reverseSeen.set(solvedKey, packInfo(0, 4));
 
-  // Theme & Auto-Resize Handlers
-  const applyTheme = t => {
-    document.documentElement.setAttribute('data-theme', t);
-    updateUI();
-  };
-  if (!document.documentElement.hasAttribute('data-theme') && window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
-    applyTheme('dark');
+    let forwardFrontier = [startKey];
+    let reverseFrontier = [solvedKey];
+
+    let forwardDepth = 0;
+    let reverseDepth = 0;
+
+    let expanded = 0;
+
+    const formatCount = (n) => n.toLocaleString();
+
+    while (
+      forwardFrontier.length > 0 &&
+      reverseFrontier.length > 0
+    ) {
+      // Expand the smaller frontier, but always expand one complete
+      // BFS layer. Both visited maps still contain every earlier layer.
+      const expandForward =
+        forwardFrontier.length <= reverseFrontier.length;
+
+      const activeSeen = expandForward ? forwardSeen : reverseSeen;
+      const otherSeen = expandForward ? reverseSeen : forwardSeen;
+      const activeFrontier =
+        expandForward ? forwardFrontier : reverseFrontier;
+      const activeDepth =
+        expandForward ? forwardDepth : reverseDepth;
+
+      const nextFrontier = [];
+
+      let bestMeeting = undefined;
+      let bestLength = Infinity;
+
+      for (let i = 0; i < activeFrontier.length; i++) {
+        const currentKey = activeFrontier[i];
+
+        const neighbours = expandForward
+          ? forwardNeighbours(currentKey)
+          : reverseNeighbours(currentKey);
+
+        for (const [neighbourKey, moveCode] of neighbours) {
+          let activeInfo = activeSeen.get(neighbourKey);
+
+          if (activeInfo === undefined) {
+            activeInfo = packInfo(activeDepth + 1, moveCode);
+            activeSeen.set(neighbourKey, activeInfo);
+            nextFrontier.push(neighbourKey);
+          }
+
+          const otherInfo = otherSeen.get(neighbourKey);
+
+          if (otherInfo !== undefined) {
+            const totalDistance =
+              infoDistance(activeInfo) +
+              infoDistance(otherInfo);
+
+            if (totalDistance < bestLength) {
+              bestLength = totalDistance;
+              bestMeeting = neighbourKey;
+            }
+          }
+        }
+
+        expanded++;
+
+        // Yield periodically so the browser can repaint and report progress.
+        if (expanded % 1500 === 0) {
+          $("status").textContent =
+            "Searching for a shortest solution… " +
+            formatCount(forwardSeen.size) +
+            " forward states and " +
+            formatCount(reverseSeen.size) +
+            " reverse states visited; current layer depths " +
+            forwardDepth +
+            "/" +
+            reverseDepth +
+            ".";
+
+          await yieldToBrowser();
+        }
+      }
+
+      if (expandForward) {
+        forwardFrontier = nextFrontier;
+        forwardDepth++;
+      } else {
+        reverseFrontier = nextFrontier;
+        reverseDepth++;
+      }
+
+      // Check for intersections only after finishing the whole layer.
+      // Select the shortest total-distance intersection from that layer.
+      if (bestMeeting !== undefined) {
+        const moves = reconstructSolution(
+          bestMeeting,
+          startKey,
+          solvedKey,
+          forwardSeen,
+          reverseSeen
+        );
+
+        return {
+          moves,
+          distance: moves.length,
+          forwardCount: forwardSeen.size,
+          reverseCount: reverseSeen.size
+        };
+      }
+
+      if (expanded % 1500 !== 0) {
+        $("status").textContent =
+          "Searching for a shortest solution… " +
+          formatCount(forwardSeen.size) +
+          " forward states and " +
+          formatCount(reverseSeen.size) +
+          " reverse states visited; current layer depths " +
+          forwardDepth +
+          "/" +
+          reverseDepth +
+          ".";
+      }
+
+      // A state with the opposite board parity cannot connect to the goal.
+      // That case is rejected before search, so exhausting both sides here
+      // means no solution exists in the searched state graph.
+    }
+
+    return null;
   }
-  window.addEventListener('message', e => {
-    if (e.data?.type === 'set-theme' || e.data?.type === 'APPLY_THEME') {
-      applyTheme(e.data.theme);
+
+  async function solveCurrentState() {
+    if (isSolving || isPlaying) {
+      return;
+    }
+
+    clearSolution();
+
+    if (inversionParity(board) !== 0) {
+      solutionPanel.hidden = false;
+      distanceElement.textContent = "No solution";
+      sequenceElement.textContent = "—";
+      solutionDetailsElement.textContent =
+        "The numbered tiles have odd inversion parity. Ordinary sliding " +
+        "moves preserve the solvability parity of a 3×3 board, so this " +
+        "board cannot reach the solved board.";
+
+      setStatus("This board permutation is unsolvable.", "error");
+      refreshControlState();
+      return;
+    }
+
+    const startKey = encodeState(board, lights);
+
+    isSolving = true;
+    refreshControlState();
+
+    setStatus("Starting bidirectional BFS…");
+
+    try {
+      const result = await bidirectionalSolve(startKey);
+
+      if (result === null) {
+        solutionPanel.hidden = false;
+        distanceElement.textContent = "No solution";
+        sequenceElement.textContent = "—";
+        solutionDetailsElement.textContent =
+          "No path to the solved state was found.";
+
+        setStatus("No solution exists for this state.", "error");
+        return;
+      }
+
+      currentSolution = result.moves;
+
+      solutionPanel.hidden = false;
+      distanceElement.textContent =
+        result.distance + (result.distance === 1 ? " move" : " moves");
+
+      sequenceElement.textContent =
+        result.moves.length > 0 ? result.moves : "(empty sequence)";
+
+      solutionDetailsElement.textContent =
+        "Visited " +
+        result.forwardCount.toLocaleString() +
+        " forward states and " +
+        result.reverseCount.toLocaleString() +
+        " reverse states. The search returns a shortest solution.";
+
+      if (result.distance === 0) {
+        setStatus("This state is already solved.", "success");
+      } else {
+        setStatus(
+          "Shortest solution found: " + result.distance + " moves.",
+          "success"
+        );
+      }
+    } catch (error) {
+      console.error(error);
+      currentSolution = null;
+      solutionPanel.hidden = true;
+
+      setStatus("Solver error: " + error.message, "error");
+    } finally {
+      isSolving = false;
+      refreshControlState();
+    }
+  }
+
+  // ------------------------------------------------------------
+  // Animated solution playback
+  // ------------------------------------------------------------
+
+  function sleep(milliseconds) {
+    return new Promise((resolve) => setTimeout(resolve, milliseconds));
+  }
+
+  async function playSolution() {
+    if (
+      isSolving ||
+      isPlaying ||
+      currentSolution === null ||
+      currentSolution.length === 0
+    ) {
+      return;
+    }
+
+    const token = ++playbackToken;
+    const solution = currentSolution;
+
+    isPlaying = true;
+    refreshControlState();
+
+    setStatus("Playing solution…");
+
+    for (let i = 0; i < solution.length; i++) {
+      if (token !== playbackToken) {
+        return;
+      }
+
+      const moveCode = MOVE_NAMES.indexOf(solution[i]);
+
+      if (moveCode < 0 || !performMove(moveCode, true, true)) {
+        if (token === playbackToken) {
+          isPlaying = false;
+          refreshControlState();
+          setStatus("Playback stopped because a move was invalid.", "error");
+        }
+
+        return;
+      }
+
+      setStatus(
+        "Playing solution: move " +
+        (i + 1) +
+        " of " +
+        solution.length +
+        " (" +
+        solution[i] +
+        ")."
+      );
+
+      // Two moves per second: a 500 ms interval between moves.
+      if (i + 1 < solution.length) {
+        await sleep(500);
+      }
+    }
+
+    if (token !== playbackToken) {
+      return;
+    }
+
+    isPlaying = false;
+    refreshControlState();
+
+    if (isSolved()) {
+      setStatus("Playback complete. Puzzle solved.", "success");
+    } else {
+      setStatus("Playback complete.");
+    }
+  }
+
+  function stopPlayback() {
+    if (!isPlaying) {
+      return;
+    }
+
+    // Invalidate the asynchronous playback loop before re-enabling controls.
+    playbackToken++;
+    isPlaying = false;
+    refreshControlState();
+    setStatus("Playback stopped.");
+  }
+
+  // ------------------------------------------------------------
+  // Keyboard controls
+  // ------------------------------------------------------------
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && isPlaying) {
+      stopPlayback();
+      return;
+    }
+
+    const target = event.target;
+
+    if (
+      target instanceof HTMLElement &&
+      target.closest("input, textarea, select, [contenteditable='true']")
+    ) {
+      return;
+    }
+
+    if (isSolving || isPlaying) {
+      return;
+    }
+
+    const keyToMove = {
+      ArrowUp: 0,
+      ArrowLeft: 1,
+      ArrowDown: 2,
+      ArrowRight: 3
+    };
+
+    if (Object.prototype.hasOwnProperty.call(keyToMove, event.key)) {
+      event.preventDefault();
+      performMove(keyToMove[event.key], true, false);
     }
   });
 
-  (function autoResize() {
-    function notifyHeight() {
-      const c = document.querySelector('.widget-container') || document.body;
-      if (!c) return;
-      const h = Math.ceil(Math.max(c.getBoundingClientRect().bottom, c.scrollHeight));
-      window.parent.postMessage({ type: 'widget-resize', height: h }, '*');
-    }
-    window.addEventListener('load', () => setTimeout(notifyHeight, 120));
-    new ResizeObserver(() => notifyHeight()).observe(document.querySelector('.widget-container') || document.body);
-  })();
-</script>
+  // ------------------------------------------------------------
+  // Event wiring and initial display
+  // ------------------------------------------------------------
 
-<script>/*luminous-slider-normalizer*/(function(){function f(r){if(!r||r.type!=='range')return;var mn=parseFloat(r.min||'0'),mx=parseFloat(r.max||'100'),v=parseFloat(r.value);if(isNaN(v))v=(mn+mx)/2;var p=mx>mn?((v-mn)/(mx-mn))*100:50;r.style.setProperty('--progress',p+'%');r.style.removeProperty('--slider-fill');}function all(){document.querySelectorAll('input[type="range"], .lumi-slider').forEach(f);}document.addEventListener('input',function(e){f(e.target);});if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',all);else all();})();</script>
+  $("customForm").addEventListener("submit", loadCustomState);
+  $("scrambleBtn").addEventListener("click", scramblePuzzle);
+  $("resetBtn").addEventListener("click", resetPuzzle);
+  $("solveBtn").addEventListener("click", solveCurrentState);
+  playButton.addEventListener("click", playSolution);
+  stopButton.addEventListener("click", stopPlayback);
+
+  // Start at the solved state.
+  renderBoard();
+  refreshControlState();
+  setStatus("Ready. The puzzle is solved.", "success");
+})();
+</script>
 </body>
 </html>
-```
